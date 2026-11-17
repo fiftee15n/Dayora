@@ -48,7 +48,7 @@ def main() -> None:
         db.delete(existing)
         db.commit()
 
-    user = User(name="Sara Ahmed", email=EMAIL, hashed_password=hash_password(PASSWORD))
+    user = User(name="Sara Ahmed", email=EMAIL, hashed_password=hash_password(PASSWORD), currency="BDT")
     db.add(user)
     db.flush()
     _seed_defaults(db, user)

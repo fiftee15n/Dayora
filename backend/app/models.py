@@ -37,7 +37,7 @@ class User(TimestampMixin, Base):
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     avatar_url: Mapped[str | None] = mapped_column(String(500))
-    currency: Mapped[str] = mapped_column(String(8), default="USD")
+    currency: Mapped[str] = mapped_column(String(8), default="BDT")
     token_version: Mapped[int] = mapped_column(Integer, default=0)
 
 

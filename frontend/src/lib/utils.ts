@@ -7,7 +7,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 const moneyFormatters = new Map<string, Intl.NumberFormat>();
-export function formatMoney(amount: number, currency = "USD", compact = false) {
+export function formatMoney(amount: number, currency = "BDT", compact = false) {
   const key = `${currency}:${compact}`;
   let f = moneyFormatters.get(key);
   if (!f) {
@@ -15,6 +15,7 @@ export function formatMoney(amount: number, currency = "USD", compact = false) {
       f = new Intl.NumberFormat(undefined, {
         style: "currency",
         currency,
+        currencyDisplay: "narrowSymbol", // ৳ instead of "BDT"
         maximumFractionDigits: compact ? 0 : 2,
         notation: compact ? "compact" : "standard",
       });
@@ -88,4 +89,4 @@ export const PAYMENT_METHODS = [
   { value: "other", label: "Other" },
 ];
 
-export const CURRENCIES = ["USD", "EUR", "GBP", "PKR", "INR", "AED", "SAR", "CAD", "AUD", "JPY"];
+export const CURRENCIES = ["BDT", "USD", "EUR", "GBP", "PKR", "INR", "AED", "SAR", "CAD", "AUD", "JPY"];
