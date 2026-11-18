@@ -1,10 +1,12 @@
 from datetime import timedelta
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import select
 
 from ..config import settings
 from ..deps import DB, CurrentUser, log_activity
+from ..mailer import send_password_reset
 from ..models import ExpenseCategory, PasswordResetToken, TaskCategory, User, utcnow
 from ..schemas import (
     AuthOut,
@@ -22,6 +24,9 @@ from ..security import (
     new_reset_token,
     verify_password,
 )
+
+# Verified against when the email is unknown, so failed logins take the same time either way.
+_DUMMY_HASH = hash_password("dayora-timing-equaliser-0")
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -95,7 +100,10 @@ def register(data: RegisterIn, response: Response, db: DB):
 @router.post("/login", response_model=AuthOut, dependencies=[Depends(auth_rate_limit)])
 def login(data: LoginIn, response: Response, db: DB):
     user = db.scalar(select(User).where(User.email == data.email.lower()))
-    if not user or not verify_password(data.password, user.hashed_password):
+    if not user:
+        verify_password(data.password, _DUMMY_HASH)
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not verify_password(data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     return _issue(response, user)
 
@@ -119,20 +127,29 @@ def me(user: CurrentUser):
 
 
 @router.post("/forgot-password", dependencies=[Depends(auth_rate_limit)])
-def forgot_password(data: ForgotPasswordIn, db: DB):
+def forgot_password(data: ForgotPasswordIn, db: DB, background: BackgroundTasks):
     msg = {"message": "If that email is registered, a reset link has been sent."}
     user = db.scalar(select(User).where(User.email == data.email.lower()))
     if not user:
         return msg
+    # Only the newest link should work.
+    for old in db.scalars(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == user.id, PasswordResetToken.used.is_(False)
+        )
+    ):
+        old.used = True
     raw, hashed = new_reset_token()
+    minutes = settings.reset_token_expire_minutes
     db.add(
         PasswordResetToken(
-            user_id=user.id, token_hash=hashed, expires_at=utcnow() + timedelta(minutes=30)
+            user_id=user.id, token_hash=hashed, expires_at=utcnow() + timedelta(minutes=minutes)
         )
     )
     db.commit()
-    # No email provider is configured yet. In development the token is returned so the
-    # flow can be tested end-to-end; in production plug an email sender in here.
+    link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={quote(raw)}"
+    background.add_task(send_password_reset, user.email, user.name, link, minutes)
+    # In development the token is also returned so the flow works without an email provider.
     if settings.is_dev:
         msg["dev_reset_token"] = raw
     return msg

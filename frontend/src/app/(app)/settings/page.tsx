@@ -1,6 +1,6 @@
 "use client";
 
-import { Camera, LogOut, Monitor, Moon, ShieldCheck, Sun, Trash2 } from "lucide-react";
+import { Camera, Download, LogOut, Monitor, Moon, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 import { toast } from "sonner";
@@ -60,6 +60,15 @@ function ProfileCard({ user }: { user: User }) {
     }
   }
 
+  async function removeAvatar() {
+    try {
+      mutate(await api<User>("/api/users/me/avatar", { method: "DELETE" }), false);
+      toast.success("Profile picture removed");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not remove picture");
+    }
+  }
+
   return (
     <Card>
       <CardHeader className="flex-col items-start gap-1">
@@ -94,6 +103,11 @@ function ProfileCard({ user }: { user: User }) {
             <p className="text-sm text-muted-foreground">
               {uploading ? "Uploading…" : `Member since ${new Date(user.created_at).toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
             </p>
+            {user.avatar_url && !uploading && (
+              <button type="button" onClick={removeAvatar} className="mt-1 text-xs font-medium text-muted-foreground hover:text-danger">
+                Remove photo
+              </button>
+            )}
           </div>
         </div>
         <form onSubmit={save} className="grid gap-4 sm:grid-cols-2" noValidate>
@@ -233,6 +247,17 @@ function DangerCard() {
           </div>
           <Button variant="outline" onClick={logoutAll}>
             <LogOut /> Sign out all
+          </Button>
+        </div>
+        <div className="flex flex-col justify-between gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center">
+          <div>
+            <p className="text-sm font-semibold">Export your data</p>
+            <p className="text-xs text-muted-foreground">Download all your tasks, finances, habits, reminders and notes as JSON.</p>
+          </div>
+          <Button variant="outline" asChild>
+            <a href="/api/users/me/export" download>
+              <Download /> Export
+            </a>
           </Button>
         </div>
         <div className="flex flex-col justify-between gap-3 rounded-xl border border-danger/30 bg-danger-soft/40 p-4 sm:flex-row sm:items-center">

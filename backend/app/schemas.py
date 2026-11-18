@@ -9,7 +9,6 @@ from pydantic import (
     EmailStr,
     Field,
     PlainSerializer,
-    field_validator,
 )
 
 
@@ -40,17 +39,19 @@ class ORM(BaseModel):
 
 
 # ---------- Auth / Users ----------
+def _strong_password(v: str) -> str:
+    if not any(c.isalpha() for c in v) or not any(c.isdigit() for c in v):
+        raise ValueError("Password must contain letters and numbers")
+    return v
+
+
+StrongPassword = Annotated[str, Field(min_length=8, max_length=128), AfterValidator(_strong_password)]
+
+
 class RegisterIn(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     email: EmailStr
-    password: str = Field(min_length=8, max_length=128)
-
-    @field_validator("password")
-    @classmethod
-    def strong_enough(cls, v: str) -> str:
-        if not any(c.isalpha() for c in v) or not any(c.isdigit() for c in v):
-            raise ValueError("Password must contain letters and numbers")
-        return v
+    password: StrongPassword
 
 
 class LoginIn(BaseModel):
@@ -80,8 +81,8 @@ class ProfileUpdate(BaseModel):
 
 
 class PasswordChange(BaseModel):
-    current_password: str
-    new_password: str = Field(min_length=8, max_length=128)
+    current_password: str = Field(max_length=128)
+    new_password: StrongPassword
 
 
 class ForgotPasswordIn(BaseModel):
@@ -89,14 +90,19 @@ class ForgotPasswordIn(BaseModel):
 
 
 class ResetPasswordIn(BaseModel):
-    token: str = Field(min_length=10)
-    new_password: str = Field(min_length=8, max_length=128)
+    token: str = Field(min_length=10, max_length=200)
+    new_password: StrongPassword
 
 
 # ---------- Categories ----------
 class TaskCategoryIn(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     color: str = Field(default="#6366F1", pattern=HEX)
+
+
+class TaskCategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    color: str | None = Field(default=None, pattern=HEX)
 
 
 class TaskCategoryOut(ORM):
@@ -110,6 +116,12 @@ class ExpenseCategoryIn(BaseModel):
     kind: TxType = "expense"
     color: str = Field(default="#8B5CF6", pattern=HEX)
     icon: str = Field(default="circle", max_length=40)
+
+
+class ExpenseCategoryUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=60)
+    color: str | None = Field(default=None, pattern=HEX)
+    icon: str | None = Field(default=None, max_length=40)
 
 
 class ExpenseCategoryOut(ORM):
@@ -262,6 +274,10 @@ class ReminderOut(ORM):
     completed: bool
     completed_at: UTCDateTime | None
     created_at: UTCDateTime
+    # Set when the calendar asks for expanded recurring reminders: this row is a projected
+    # future occurrence, and `series_remind_at` is the stored (next) time of the series.
+    occurrence: bool = False
+    series_remind_at: UTCDateTime | None = None
 
 
 # ---------- Notes ----------

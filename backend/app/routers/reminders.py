@@ -2,7 +2,7 @@ from calendar import monthrange
 from datetime import date, datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import select
 
 from ..deps import DB, ClockDep, CurrentUser, get_owned, log_activity
@@ -26,6 +26,40 @@ def next_occurrence(dt: datetime, recurrence: str) -> datetime | None:
     return None
 
 
+MAX_OCCURRENCES = 1000
+
+
+def _expand(reminders, start_utc: datetime, end_utc: datetime) -> list[ReminderOut]:
+    """Project recurring reminders onto every occurrence inside [start_utc, end_utc).
+
+    The stored `remind_at` is the series' next due time; earlier occurrences were already
+    completed (or rolled over), so only that time and later ones are shown.
+    """
+    out: list[ReminderOut] = []
+    for r in reminders:
+        base = ReminderOut.model_validate(r)
+        if r.recurrence == "none" or r.completed:
+            if start_utc <= r.remind_at < end_utc:
+                out.append(base)
+            continue
+        at, n = r.remind_at, 0
+        while at < end_utc and n < MAX_OCCURRENCES:
+            if at >= start_utc:
+                out.append(
+                    base.model_copy(
+                        update={
+                            "remind_at": at,
+                            "occurrence": at != r.remind_at,
+                            "series_remind_at": r.remind_at,
+                        }
+                    )
+                )
+            at = next_occurrence(at, r.recurrence)
+            n += 1
+    out.sort(key=lambda o: o.remind_at)
+    return out
+
+
 @router.get("", response_model=list[ReminderOut])
 def list_reminders(
     user: CurrentUser,
@@ -34,7 +68,11 @@ def list_reminders(
     status: Literal["all", "upcoming", "completed", "overdue", "due"] = "all",
     start: date | None = None,
     end: date | None = None,
-    limit: int = 500,
+    expand: bool = Query(
+        default=False,
+        description="With start & end: include every future occurrence of recurring reminders.",
+    ),
+    limit: int = Query(default=500, ge=1, le=500),
 ):
     now = clock.now_utc
     stmt = select(Reminder).where(Reminder.user_id == user.id)
@@ -44,12 +82,31 @@ def list_reminders(
         stmt = stmt.where(Reminder.completed.is_(True))
     elif status in {"overdue", "due"}:
         stmt = stmt.where(Reminder.completed.is_(False), Reminder.remind_at < now)
+
+    if expand and start and end:
+        if (end - start).days > 400:
+            raise HTTPException(status_code=400, detail="Range can be at most about a year")
+        start_utc = clock.day_start_utc(start)
+        end_utc = clock.day_start_utc(end + timedelta(days=1))
+        # Recurring series that started before the window can still land inside it.
+        stmt = stmt.where(
+            Reminder.remind_at < end_utc,
+            (Reminder.remind_at >= start_utc)
+            | ((Reminder.recurrence != "none") & Reminder.completed.is_(False)),
+        )
+        return _expand(db.scalars(stmt).all(), start_utc, end_utc)[:limit]
+
     if start:
         stmt = stmt.where(Reminder.remind_at >= clock.day_start_utc(start))
     if end:
         stmt = stmt.where(Reminder.remind_at < clock.day_start_utc(end + timedelta(days=1)))
     order = Reminder.remind_at.desc() if status == "completed" else Reminder.remind_at
-    return db.scalars(stmt.order_by(order).limit(min(limit, 500))).all()
+    return db.scalars(stmt.order_by(order).limit(limit)).all()
+
+
+@router.get("/{reminder_id}", response_model=ReminderOut)
+def get_reminder(reminder_id: int, user: CurrentUser, db: DB):
+    return get_owned(db, Reminder, reminder_id, user)
 
 
 @router.post("", response_model=ReminderOut, status_code=201)

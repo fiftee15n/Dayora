@@ -77,7 +77,7 @@ function ReminderItem({ r, onEdit }: { r: Reminder; onEdit: () => void }) {
           <Button variant="ghost" size="icon" className="size-8" onClick={reopen} aria-label="Mark as not done">
             <RotateCcw />
           </Button>
-        ) : (
+        ) : r.occurrence ? null : (
           <Button variant="ghost" size="icon" className="size-8 text-success" onClick={complete} aria-label="Mark as done">
             <Check />
           </Button>
@@ -105,7 +105,7 @@ export default function CalendarPage() {
   const gridEnd = endOfWeek(endOfMonth(month), { weekStartsOn: 1 });
   const range = { start: toISODate(gridStart), end: toISODate(gridEnd) };
 
-  const { data: reminders } = useSWR<Reminder[]>(`/api/reminders${qs(range)}`);
+  const { data: reminders } = useSWR<Reminder[]>(`/api/reminders${qs({ ...range, expand: true })}`);
   const { data: tasks } = useSWR<Task[]>(`/api/tasks${qs({ due_from: range.start, due_to: range.end })}`);
   const { data: list } = useSWR<Reminder[]>(`/api/reminders?status=${listTab}&limit=30`);
 
@@ -122,7 +122,8 @@ export default function CalendarPage() {
     setDialogOpen(true);
   }
   function edit(r: Reminder) {
-    setEditing(r);
+    // A projected occurrence edits the whole series, starting from its stored time.
+    setEditing(r.occurrence && r.series_remind_at ? { ...r, remind_at: r.series_remind_at, occurrence: false } : r);
     setDialogOpen(true);
   }
 
