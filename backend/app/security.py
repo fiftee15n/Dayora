@@ -57,6 +57,7 @@ class RateLimiter:
         self.max_calls = max_calls
         self.per_seconds = per_seconds
         self.hits: dict[str, deque[float]] = defaultdict(deque)
+        self._last_sweep = time.monotonic()
 
     def __call__(self, request: Request) -> None:
         if settings.app_env == "test":
@@ -64,6 +65,7 @@ class RateLimiter:
         ip = request.client.host if request.client else "unknown"
         key = f"{ip}:{request.url.path}"
         now = time.monotonic()
+        self._sweep(now)
         q = self.hits[key]
         while q and now - q[0] > self.per_seconds:
             q.popleft()
@@ -73,6 +75,14 @@ class RateLimiter:
                 detail="Too many attempts. Please try again shortly.",
             )
         q.append(now)
+
+    def _sweep(self, now: float) -> None:
+        """Forget idle clients so the table doesn't grow forever."""
+        if now - self._last_sweep < self.per_seconds:
+            return
+        self._last_sweep = now
+        for key in [k for k, q in self.hits.items() if not q or now - q[-1] > self.per_seconds]:
+            del self.hits[key]
 
 
 auth_rate_limit = RateLimiter(max_calls=10, per_seconds=60)

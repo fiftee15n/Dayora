@@ -20,7 +20,25 @@ Interactive docs: http://localhost:8000/docs
 * Mobile: the same response includes `access_token`; send it as `Authorization: Bearer <token>`.
 * Clients send `X-TZ-Offset` (minutes east of UTC) so "today" matches the user's local day.
 * Passwords hashed with bcrypt; login/register/reset endpoints are rate-limited.
-* `POST /api/auth/logout-all` revokes every token for the user.
+* `POST /api/auth/logout-all` revokes every token for the user. Changing the password does the
+  same for every *other* session and returns a fresh token for the current one.
+* Password reset emails are sent over SMTP (`SMTP_*` in `.env`). Without `SMTP_HOST` the email is
+  logged, and in development the token is also returned as `dev_reset_token`.
+* Outside development the API refuses to start unless `JWT_SECRET` is 32+ characters.
+  Set `COOKIE_SECURE=true` behind HTTPS (this also enables HSTS).
+
+## Endpoints at a glance
+| Area | Endpoints |
+| --- | --- |
+| Auth | `POST /api/auth/register · login · logout · logout-all · forgot-password · reset-password`, `GET /api/auth/me` |
+| Account | `PATCH/DELETE /api/users/me`, `POST /api/users/me/password`, `POST/DELETE /api/users/me/avatar`, `GET /api/users/me/export` |
+| Categories | `GET/POST /api/categories/tasks`, `PATCH/DELETE /api/categories/tasks/{id}` (same for `/expenses`) |
+| Tasks | `GET/POST /api/tasks`, `GET/PATCH/DELETE /api/tasks/{id}` |
+| Finance | `/api/transactions` (CRUD, paged), `/api/transactions/summary`, `GET/PUT /api/budgets`, `DELETE /api/budgets/{id}` |
+| Habits | `GET/POST /api/habits`, `GET /api/habits/overview`, `PATCH/DELETE /api/habits/{id}`, `POST /api/habits/{id}/toggle`, `GET /api/habits/{id}/logs` |
+| Reminders | `GET/POST /api/reminders` (`?start&end&expand=true` projects recurring ones), `GET/PATCH/DELETE /api/reminders/{id}`, `POST /api/reminders/{id}/complete` |
+| Notes | `GET/POST /api/notes`, `GET /api/notes/categories`, `GET/PATCH/DELETE /api/notes/{id}` |
+| Insights | `GET /api/dashboard`, `GET /api/reports?period=week|month&offset=`, `GET /api/activity` |
 
 ## Database
 SQLite by default. For PostgreSQL / Neon: `pip install "psycopg[binary]"` and set

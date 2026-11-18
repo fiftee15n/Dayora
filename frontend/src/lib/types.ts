@@ -110,6 +110,9 @@ export interface Reminder {
   completed: boolean;
   completed_at: string | null;
   created_at: string;
+  /** True for a projected future occurrence of a recurring reminder (calendar view). */
+  occurrence?: boolean;
+  series_remind_at?: string | null;
 }
 
 export interface Note {
