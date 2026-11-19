@@ -26,6 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { mediaUrl } from "./api";
+import { useFloatingTabBarSpace } from "./GlassTabBar";
 import { BRAND, radius, useColors } from "./theme";
 import { alpha, initials } from "./utils";
 
@@ -107,6 +108,7 @@ export function Screen({
 }) {
   const c = useColors();
   const insets = useSafeAreaInsets();
+  const barSpace = useFloatingTabBarSpace(); // room for the floating tab bar on tab screens
   const header = title ? (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       {back && (
@@ -129,7 +131,7 @@ export function Screen({
       {header}
       {scroll ? (
         <ScrollView
-          contentContainerStyle={[pad, { paddingBottom: 110, gap: 14 }]}
+          contentContainerStyle={[pad, { paddingBottom: barSpace ? barSpace + 32 : 110, gap: 14 }]}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             onRefresh ? (
@@ -140,7 +142,7 @@ export function Screen({
           {children}
         </ScrollView>
       ) : (
-        <View style={[{ flex: 1 }, pad]}>{children}</View>
+        <View style={[{ flex: 1, paddingBottom: barSpace }, pad]}>{children}</View>
       )}
       {footer}
     </View>
@@ -247,8 +249,9 @@ export function IconButton({ name, onPress, color, bg, size = 20, label }: { nam
 }
 
 export function Fab({ onPress, icon = "plus" }: { onPress: () => void; icon?: IconName }) {
+  const barSpace = useFloatingTabBarSpace();
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, { opacity: pressed ? 0.85 : 1 }]} accessibilityLabel="Add">
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, { bottom: 22 + barSpace, opacity: pressed ? 0.85 : 1 }]} accessibilityLabel="Add">
       <LinearGradient colors={BRAND} style={styles.fabInner}>
         <Icon name={icon} size={26} color="#fff" />
       </LinearGradient>
@@ -600,7 +603,7 @@ export const styles = StyleSheet.create({
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   btn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
   iconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  fab: { position: "absolute", right: 18, bottom: 22, borderRadius: 20, elevation: 6, shadowColor: "#6366F1", shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  fab: { position: "absolute", right: 18, bottom: 22, borderRadius: 20, elevation: 6, shadowColor: "#000000", shadowOpacity: 0.25, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   fabInner: { width: 58, height: 58, borderRadius: 20, alignItems: "center", justifyContent: "center" },
   input: { flexDirection: "row", alignItems: "center", gap: 8, height: 48, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 12 },
   chip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, height: 34, borderRadius: 17, borderWidth: 1.5 },

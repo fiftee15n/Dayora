@@ -7,6 +7,9 @@ os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_URL"] = f"sqlite:///{_tmp}/test.db"
 os.environ["UPLOAD_DIR"] = f"{_tmp}/uploads"
 os.environ["JWT_SECRET"] = "test-secret-test-secret-test-secret-123"
+# Never send real email from tests, even if backend/.env has SMTP configured.
+os.environ["SMTP_HOST"] = ""
+os.environ["GOOGLE_CLIENT_IDS"] = ""
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

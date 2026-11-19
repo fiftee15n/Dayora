@@ -1,6 +1,7 @@
 import * as React from "react";
 
 import { api, loadSession, setToken, setUnauthorizedHandler } from "./api";
+import { googleSignOut } from "./google";
 import { cancelAllReminderNotifications } from "./notifications";
 import { clearCache } from "./query";
 import type { AuthOut, User } from "./types";
@@ -74,6 +75,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             method: "POST",
           }).catch(() => {});
         }
+        await googleSignOut();
         await reset();
       },
     }),

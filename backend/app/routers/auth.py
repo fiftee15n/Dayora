@@ -1,3 +1,6 @@
+import hmac
+import re
+import secrets
 from datetime import timedelta
 from urllib.parse import quote
 
@@ -6,14 +9,20 @@ from sqlalchemy import select
 
 from ..config import settings
 from ..deps import DB, CurrentUser, log_activity
-from ..mailer import send_password_reset
-from ..models import ExpenseCategory, PasswordResetToken, TaskCategory, User, utcnow
+from ..google_auth import GoogleNotConfigured, GoogleTokenError, verify_google_id_token
+from ..mailer import send_password_reset, send_verification_code
+from ..models import ExpenseCategory, PasswordResetToken, PendingSignup, TaskCategory, User, utcnow
 from ..schemas import (
     AuthOut,
     ForgotPasswordIn,
+    GoogleSignInIn,
     LoginIn,
     RegisterIn,
     ResetPasswordIn,
+    SignupResendIn,
+    SignupStartIn,
+    SignupStartOut,
+    SignupVerifyIn,
     UserOut,
 )
 from ..security import (
@@ -21,7 +30,9 @@ from ..security import (
     create_access_token,
     hash_password,
     hash_reset_token,
+    hash_verification_code,
     new_reset_token,
+    new_verification_code,
     verify_password,
 )
 
@@ -84,16 +95,166 @@ def _issue(response: Response, user: User) -> AuthOut:
     dependencies=[Depends(auth_rate_limit)],
 )
 def register(data: RegisterIn, response: Response, db: DB):
+    """One-step sign-up without email verification (used by the web app)."""
     email = data.email.lower()
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="An account with this email already exists")
-    user = User(name=data.name.strip(), email=email, hashed_password=hash_password(data.password))
+    user = _create_user(db, name=data.name.strip(), email=email, hashed_password=hash_password(data.password))
+    db.commit()
+    db.refresh(user)
+    return _issue(response, user)
+
+
+def _create_user(db, *, name: str, email: str, hashed_password: str, google_sub: str | None = None) -> User:
+    user = User(name=name, email=email, hashed_password=hashed_password, google_sub=google_sub)
     db.add(user)
     db.flush()
     _seed_defaults(db, user)
     log_activity(db, user, "created", "account", "Welcome to Dayora! Account created.")
+    # A half-finished email sign-up for this address is no longer needed.
+    pending = db.scalar(select(PendingSignup).where(PendingSignup.email == email))
+    if pending:
+        db.delete(pending)
+    return user
+
+
+def _name_from_email(email: str) -> str:
+    """"sara.ahmed@x.com" -> "Sara Ahmed" (the name can be changed later in Settings)."""
+    local = email.split("@", 1)[0]
+    words = [w for w in re.split(r"[._\-+]+", re.sub(r"\d+", "", local)) if w]
+    return " ".join(w.capitalize() for w in words)[:120] or local[:120] or "Dayora user"
+
+
+# ---------------------------------------------------------------- sign-up with an emailed code
+
+
+def _seconds_until_resend(pending: PendingSignup) -> int:
+    elapsed = (utcnow() - pending.sent_at).total_seconds()
+    return max(0, int(settings.verification_resend_seconds - elapsed + 0.999))
+
+
+def _send_new_code(pending: PendingSignup, background: BackgroundTasks) -> str:
+    code = new_verification_code()
+    pending.code_hash = hash_verification_code(pending.email, code)
+    pending.expires_at = utcnow() + timedelta(minutes=settings.verification_code_expire_minutes)
+    pending.sent_at = utcnow()
+    pending.attempts = 0
+    background.add_task(send_verification_code, pending.email, code, settings.verification_code_expire_minutes)
+    return code
+
+
+def _start_out(pending: PendingSignup, code: str | None) -> SignupStartOut:
+    return SignupStartOut(
+        message=f"We sent a 6-digit code to {pending.email}.",
+        email=pending.email,
+        expires_in=max(0, int((pending.expires_at - utcnow()).total_seconds())),
+        resend_in=_seconds_until_resend(pending),
+        # Without an email provider in development, hand the code back so the flow can be tested.
+        dev_code=code if code and settings.is_dev and not settings.email_enabled else None,
+    )
+
+
+@router.post("/signup/start", response_model=SignupStartOut, dependencies=[Depends(auth_rate_limit)])
+def signup_start(data: SignupStartIn, db: DB, background: BackgroundTasks):
+    """Step 1: remember the details and email a 6-digit code. The account is created on verify."""
+    email = data.email.lower()
+    if db.scalar(select(User).where(User.email == email)):
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    name = (data.name or "").strip() or _name_from_email(email)
+    pending = db.scalar(select(PendingSignup).where(PendingSignup.email == email))
+    code = None
+    if pending is None:
+        pending = PendingSignup(email=email, name=name, hashed_password=hash_password(data.password))
+        db.add(pending)
+        code = _send_new_code(pending, background)
+    else:
+        pending.name = name
+        pending.hashed_password = hash_password(data.password)
+        # Pressing "Create account" again shortly after doesn't spam the inbox; the last code still works.
+        if _seconds_until_resend(pending) == 0 or pending.expires_at < utcnow():
+            code = _send_new_code(pending, background)
+    db.commit()
+    return _start_out(pending, code)
+
+
+@router.post("/signup/resend", response_model=SignupStartOut, dependencies=[Depends(auth_rate_limit)])
+def signup_resend(data: SignupResendIn, db: DB, background: BackgroundTasks):
+    pending = db.scalar(select(PendingSignup).where(PendingSignup.email == data.email.lower()))
+    if not pending:
+        raise HTTPException(status_code=404, detail="No sign-up in progress for this email. Please start again.")
+    wait = _seconds_until_resend(pending)
+    if wait:
+        raise HTTPException(status_code=429, detail=f"Please wait {wait} seconds before requesting a new code.")
+    code = _send_new_code(pending, background)
+    db.commit()
+    return _start_out(pending, code)
+
+
+@router.post(
+    "/signup/verify",
+    response_model=AuthOut,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(auth_rate_limit)],
+)
+def signup_verify(data: SignupVerifyIn, response: Response, db: DB):
+    """Step 2: check the code and create the account."""
+    email = data.email.lower()
+    pending = db.scalar(select(PendingSignup).where(PendingSignup.email == email))
+    if not pending:
+        raise HTTPException(status_code=400, detail="No sign-up in progress for this email. Please start again.")
+    if pending.attempts >= settings.verification_max_attempts:
+        raise HTTPException(status_code=400, detail="Too many wrong codes. Request a new code.")
+    if pending.expires_at < utcnow():
+        raise HTTPException(status_code=400, detail="This code has expired. Request a new code.")
+    if not hmac.compare_digest(hash_verification_code(email, data.code), pending.code_hash):
+        pending.attempts += 1
+        db.commit()
+        left = settings.verification_max_attempts - pending.attempts
+        detail = f"That code isn't right. {left} attempt{'s' if left != 1 else ''} left." if left else (
+            "Too many wrong codes. Request a new code."
+        )
+        raise HTTPException(status_code=400, detail=detail)
+    if db.scalar(select(User).where(User.email == email)):
+        db.delete(pending)
+        db.commit()
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    user = _create_user(db, name=pending.name, email=email, hashed_password=pending.hashed_password)
     db.commit()
     db.refresh(user)
+    return _issue(response, user)
+
+
+# ---------------------------------------------------------------- Google sign-in
+
+
+@router.post("/google", response_model=AuthOut, dependencies=[Depends(auth_rate_limit)])
+def google_sign_in(data: GoogleSignInIn, response: Response, db: DB):
+    """Sign in (or sign up) with a Google ID token obtained by the app."""
+    try:
+        identity = verify_google_id_token(data.id_token)
+    except GoogleNotConfigured as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except GoogleTokenError as e:
+        raise HTTPException(status_code=401, detail=str(e)) from e
+
+    user = db.scalar(select(User).where(User.google_sub == identity.sub))
+    if user is None:
+        user = db.scalar(select(User).where(User.email == identity.email))
+        if user is not None:
+            # Google has verified this address, so it's safe to link it to the existing account.
+            user.google_sub = identity.sub
+            log_activity(db, user, "updated", "account", "Google sign-in linked")
+        else:
+            user = _create_user(
+                db,
+                name=identity.name[:120] or _name_from_email(identity.email),
+                email=identity.email,
+                # No password yet; "Forgot password" can set one later.
+                hashed_password=hash_password(secrets.token_urlsafe(32)),
+                google_sub=identity.sub,
+            )
+        db.commit()
+        db.refresh(user)
     return _issue(response, user)
 
 

@@ -63,7 +63,8 @@
       "./plugins/withEmbeddedDebugBundle"
     ],
     "extra": {
-      "defaultApiUrl": "http://192.168.1.18:8000"
+      "defaultApiUrl": "http://192.168.1.18:8000",
+      "googleWebClientId": ""
     }
   }
 }

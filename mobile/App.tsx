@@ -1,4 +1,3 @@
-import Feather from "@expo/vector-icons/Feather";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -10,7 +9,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth } from "./src/auth";
 import { syncReminderNotifications } from "./src/notifications";
-import { type AuthStack, ForgotScreen, LoginScreen, RegisterScreen, ResetScreen } from "./src/screens/AuthScreens";
+import { type AuthStack, ForgotScreen, LoginScreen, RegisterScreen, ResetScreen, VerifyScreen } from "./src/screens/AuthScreens";
 import { CalendarScreen } from "./src/screens/CalendarScreen";
 import { DashboardScreen } from "./src/screens/DashboardScreen";
 import { HabitsScreen } from "./src/screens/HabitsScreen";
@@ -20,6 +19,8 @@ import { type NoteEditorParams, NoteEditorScreen, NotesScreen } from "./src/scre
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
 import { useColors, useIsDark } from "./src/theme";
+import { BlurTargetLayout, BlurTargetsProvider, GlassTabBar } from "./src/GlassTabBar";
+import { type GlyphName } from "./src/icons";
 
 type RootStack = AuthStack & {
   Tabs: undefined;
@@ -32,33 +33,30 @@ type RootStack = AuthStack & {
 const Stack = createNativeStackNavigator<RootStack>();
 const Tab = createBottomTabNavigator();
 
-const TAB_ICONS: Record<string, React.ComponentProps<typeof Feather>["name"]> = {
+const TAB_ICONS: Record<string, GlyphName> = {
   Home: "home",
-  Tasks: "check-square",
-  Money: "credit-card",
+  Tasks: "list-checks",
+  Money: "wallet",
   Habits: "target",
   Calendar: "calendar",
 };
 
 function Tabs() {
-  const c = useColors();
   return (
-    <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: c.primary,
-        tabBarInactiveTintColor: c.mutedForeground,
-        tabBarStyle: { backgroundColor: c.card, borderTopColor: c.border, height: 64, paddingTop: 6, paddingBottom: 8 },
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
-        tabBarIcon: ({ color, size }) => <Feather name={TAB_ICONS[route.name]} color={color} size={size - 2} />,
-      })}
-    >
-      <Tab.Screen name="Home" component={DashboardScreen} />
-      <Tab.Screen name="Tasks" component={TasksScreen} />
-      <Tab.Screen name="Money" component={MoneyScreen} />
-      <Tab.Screen name="Habits" component={HabitsScreen} />
-      <Tab.Screen name="Calendar" component={CalendarScreen} />
-    </Tab.Navigator>
+    <BlurTargetsProvider>
+      <Tab.Navigator
+        // Floating glass bar drawn over the screens (src/GlassTabBar.tsx).
+        tabBar={(props) => <GlassTabBar {...props} icons={TAB_ICONS} />}
+        screenLayout={({ route, children }) => <BlurTargetLayout routeKey={route.key}>{children}</BlurTargetLayout>}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tab.Screen name="Home" component={DashboardScreen} />
+        <Tab.Screen name="Tasks" component={TasksScreen} />
+        <Tab.Screen name="Money" component={MoneyScreen} />
+        <Tab.Screen name="Habits" component={HabitsScreen} />
+        <Tab.Screen name="Calendar" component={CalendarScreen} />
+      </Tab.Navigator>
+    </BlurTargetsProvider>
   );
 }
 
@@ -105,6 +103,7 @@ function Root() {
           <>
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="Register" component={RegisterScreen} />
+            <Stack.Screen name="Verify" component={VerifyScreen} />
             <Stack.Screen name="Forgot" component={ForgotScreen} />
             <Stack.Screen name="Reset" component={ResetScreen} />
           </>

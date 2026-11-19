@@ -39,6 +39,23 @@ class User(TimestampMixin, Base):
     avatar_url: Mapped[str | None] = mapped_column(String(500))
     currency: Mapped[str] = mapped_column(String(8), default="BDT")
     token_version: Mapped[int] = mapped_column(Integer, default=0)
+    # Google account ID ("sub" claim) once the user has signed in with Google.
+    google_sub: Mapped[str | None] = mapped_column(String(64), unique=True, index=True)
+
+
+class PendingSignup(Base):
+    """A sign-up waiting for its email verification code. Becomes a User once verified."""
+
+    __tablename__ = "pending_signups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    code_hash: Mapped[str] = mapped_column(String(128))
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class PasswordResetToken(Base):

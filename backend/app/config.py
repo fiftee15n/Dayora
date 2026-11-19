@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     smtp_starttls: bool = True
     smtp_ssl: bool = False
 
+    # Sign-up email verification (6-digit code).
+    verification_code_expire_minutes: int = 10
+    verification_max_attempts: int = 5
+    verification_resend_seconds: int = 60
+
+    # Google sign-in: comma-separated OAuth client IDs whose ID tokens are accepted
+    # (the "Web application" client ID used as webClientId in the app). Empty disables it.
+    google_client_ids: str = ""
+
     @property
     def is_dev(self) -> bool:
         return self.app_env.lower() in {"development", "dev", "test"}
@@ -41,6 +50,10 @@ class Settings(BaseSettings):
     @property
     def email_enabled(self) -> bool:
         return bool(self.smtp_host)
+
+    @property
+    def google_client_id_list(self) -> list[str]:
+        return [c.strip() for c in self.google_client_ids.split(",") if c.strip()]
 
     @property
     def cors_origin_list(self) -> list[str]:

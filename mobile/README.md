@@ -55,3 +55,27 @@ EMBED_DEBUG_BUNDLE=1 npx expo prebuild -p android --clean
 cd android
 CXX_STAGING_DIR=D:/c ./gradlew.bat assembleDebug
 ```
+
+## Sign-up email codes
+
+Creating an account emails a 6-digit code (see `backend/README.md` → "Sending from Gmail").
+Until SMTP is set up, the development API returns the code and the verify screen shows it
+("tap to fill").
+
+## Google sign-in setup
+
+Uses `@react-native-google-signin/google-signin` (native, so rebuild the APK after changes).
+
+1. In [Google Cloud Console](https://console.cloud.google.com/) create a project, then
+   **APIs & Services → OAuth consent screen**: External, add your Gmail as a test user.
+2. **Credentials → Create credentials → OAuth client ID → Android**:
+   package `app.dayora.mobile`, SHA-1 of the signing key. For debug builds made here:
+   `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25`
+   (`keytool -list -v -keystore android/app/debug.keystore -alias androiddebugkey -storepass android`).
+3. **Create credentials → OAuth client ID → Web application** (no URLs needed). Copy its
+   client ID into:
+   - `app.json` → `expo.extra.googleWebClientId` (restart `npx expo start`; no APK rebuild needed)
+   - `backend/.env` → `GOOGLE_CLIENT_IDS=` (restart the API)
+
+"Google sign-in isn't set up for this app's signing key (SHA-1)" means step 2 doesn't match
+the APK's package name or SHA-1. A release build signed with another key needs its own SHA-1.
