@@ -1,6 +1,6 @@
 from collections.abc import Generator
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from .config import settings
@@ -27,6 +27,18 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 class Base(DeclarativeBase):
     pass
+
+
+def upgrade_schema() -> None:
+    """Add columns introduced after a database was first created (create_all only adds tables)."""
+    insp = inspect(engine)
+    if "users" not in insp.get_table_names():
+        return
+    columns = {c["name"] for c in insp.get_columns("users")}
+    with engine.begin() as conn:
+        if "google_sub" not in columns:
+            conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(64)"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"))
 
 
 def get_db() -> Generator[Session, None, None]:

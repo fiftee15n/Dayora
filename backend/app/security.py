@@ -1,4 +1,5 @@
 import hashlib
+import hmac
 import secrets
 import time
 from collections import defaultdict, deque
@@ -45,6 +46,16 @@ def new_reset_token() -> tuple[str, str]:
 
 def hash_reset_token(raw: str) -> str:
     return hashlib.sha256(raw.encode()).hexdigest()
+
+
+def new_verification_code() -> str:
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def hash_verification_code(email: str, code: str) -> str:
+    """Keyed hash, so a leaked table can't be brute-forced offline (only 10^6 codes)."""
+    msg = f"{email.lower()}:{code}".encode()
+    return hmac.new(settings.jwt_secret.encode(), msg, hashlib.sha256).hexdigest()
 
 
 class RateLimiter:

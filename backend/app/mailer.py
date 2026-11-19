@@ -64,6 +64,23 @@ def send_password_reset(to: str, name: str, link: str, minutes: int) -> bool:
     return send_email(to, "Reset your Dayora password", text, html)
 
 
+def send_verification_code(to: str, code: str, minutes: int) -> bool:
+    text = (
+        f"Your Dayora verification code is {code}\n\n"
+        f"Enter it in the app to finish creating your account. It expires in {minutes} minutes.\n"
+        f"If you didn't try to sign up, you can ignore this email.\n\n— Dayora"
+    )
+    html = f"""\
+<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;color:#0a0a0a">
+  <h2 style="margin:0 0 12px">Verify your email</h2>
+  <p>Enter this code in the Dayora app to finish creating your account:</p>
+  <p style="margin:24px 0;font-size:34px;font-weight:800;letter-spacing:10px;background:#f5f5f5;border-radius:12px;padding:16px;text-align:center">{code}</p>
+  <p style="color:#6b6b6b;font-size:13px">The code expires in {minutes} minutes.
+  If you didn't try to sign up, you can ignore this email.</p>
+</div>"""
+    return send_email(to, f"{code} is your Dayora verification code", text, html)
+
+
 def _escape(s: str) -> str:
     return (
         s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")

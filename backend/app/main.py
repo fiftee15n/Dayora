@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from . import models  # noqa: F401  (register tables)
 from .config import settings
-from .database import Base, engine
+from .database import Base, engine, upgrade_schema
 from .routers import auth, categories, habits, insights, notes, reminders, tasks, transactions, users
 
 
@@ -15,6 +15,7 @@ from .routers import auth, categories, habits, insights, notes, reminders, tasks
 async def lifespan(_: FastAPI):
     # For production Postgres, prefer Alembic migrations; create_all is fine for SQLite/dev.
     Base.metadata.create_all(bind=engine)
+    upgrade_schema()
     yield
 
 

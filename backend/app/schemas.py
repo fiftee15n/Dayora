@@ -54,6 +54,35 @@ class RegisterIn(BaseModel):
     password: StrongPassword
 
 
+class SignupStartIn(BaseModel):
+    """Step 1 of sign-up: we email a 6-digit code. The name is optional (derived from the email)."""
+
+    name: str | None = Field(default=None, max_length=120)
+    email: EmailStr
+    password: StrongPassword
+
+
+class SignupVerifyIn(BaseModel):
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$")
+
+
+class SignupResendIn(BaseModel):
+    email: EmailStr
+
+
+class SignupStartOut(BaseModel):
+    message: str
+    email: EmailStr
+    expires_in: int  # seconds
+    resend_in: int  # seconds until another code can be requested
+    dev_code: str | None = None  # development only, when email isn't configured
+
+
+class GoogleSignInIn(BaseModel):
+    id_token: str = Field(min_length=20, max_length=4096)
+
+
 class LoginIn(BaseModel):
     email: EmailStr
     password: str = Field(min_length=1, max_length=128)
