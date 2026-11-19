@@ -19,6 +19,7 @@ import { type NoteEditorParams, NoteEditorScreen, NotesScreen } from "./src/scre
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
 import { useColors, useIsDark } from "./src/theme";
+import { FabScrollProvider } from "./src/fabScroll";
 import { BlurTargetLayout, BlurTargetsProvider, GlassTabBar } from "./src/GlassTabBar";
 import { type GlyphName } from "./src/icons";
 
@@ -34,10 +35,10 @@ const Stack = createNativeStackNavigator<RootStack>();
 const Tab = createBottomTabNavigator();
 
 const TAB_ICONS: Record<string, GlyphName> = {
-  Home: "home",
-  Tasks: "list-checks",
+  Home: "squares",
+  Tasks: "check-circle",
   Money: "wallet",
-  Habits: "target",
+  Habits: "flame",
   Calendar: "calendar",
 };
 
@@ -90,7 +91,10 @@ function Root() {
   return (
     <NavigationContainer theme={theme}>
       <StatusBar style={dark ? "light" : "dark"} />
-      <Stack.Navigator screenOptions={{ headerShown: false, animation: "slide_from_right", contentStyle: { backgroundColor: c.background } }}>
+      <Stack.Navigator
+        screenOptions={{ headerShown: false, animation: "slide_from_right", contentStyle: { backgroundColor: c.background } }}
+        screenLayout={({ children }) => <FabScrollProvider>{children}</FabScrollProvider>}
+      >
         {user ? (
           <>
             <Stack.Screen name="Tabs" component={Tabs} />

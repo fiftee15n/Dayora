@@ -12,35 +12,17 @@ import {
   startOfWeek,
 } from "date-fns";
 import * as React from "react";
-import { Pressable, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
 import { api } from "../api";
 import { Ring } from "../charts";
-import { HabitForm, habitIcon } from "../forms";
+import { HabitForm } from "../forms";
+import { Glyph, habitGlyph } from "../icons";
 import { invalidate, useQuery } from "../query";
 import { useColors } from "../theme";
 import type { Habit, HabitOverview } from "../types";
-import {
-  Badge,
-  Button,
-  Card,
-  Empty,
-  ErrorBox,
-  Fab,
-  Icon,
-  IconButton,
-  IconTile,
-  Loading,
-  Row,
-  Screen,
-  Segmented,
-  Sheet,
-  T,
-  confirm,
-  errorMessage,
-  toast,
-} from "../ui";
-import { alpha, parseDateOnly, toISODate } from "../utils";
+import { Button, Card, Empty, ErrorBox, Fab, IconButton, Loading, Row, Screen, Segmented, Sheet, T, confirm, errorMessage, toast } from "../ui";
+import { parseDateOnly, toISODate } from "../utils";
 
 export function HabitsScreen() {
   const c = useColors();
@@ -56,7 +38,7 @@ export function HabitsScreen() {
       const updated = await api<Habit>(`/api/habits/${h.id}/toggle`, { method: "POST", json: {} });
       if (list.data) list.mutate(list.data.map((x) => (x.id === h.id ? updated : x)));
       const done = updated.frequency === "daily" ? updated.done_today : updated.done_this_week;
-      if (done) toast(updated.current_streak > 1 ? `🔥 ${updated.current_streak} streak!` : "Checked in ✓");
+      if (done) toast(updated.current_streak > 1 ? `${updated.current_streak}-${updated.frequency === "daily" ? "day" : "week"} streak. Keep going!` : "Checked in");
     } catch (e) {
       toast(errorMessage(e));
     }
@@ -76,18 +58,27 @@ export function HabitsScreen() {
         }}
       >
         {o && tab === "active" ? (
-          <Card style={{ gap: 16 }}>
+          <View style={{ backgroundColor: c.card, borderRadius: 24, borderWidth: 1, borderColor: c.border, padding: 18, gap: 18 }}>
             <Row gap={16}>
-              <Ring value={o.progress} size={76} stroke={8} color={c.success}>
-                <T variant="h3">{Math.round(o.progress)}%</T>
+              <Ring value={o.progress} size={78} stroke={7} color={c.foreground}>
+                <Text style={{ color: c.foreground, fontSize: 18, fontWeight: "800", fontVariant: ["tabular-nums"] }}>{Math.round(o.progress)}%</Text>
               </Ring>
-              <View style={{ flex: 1, gap: 4 }}>
-                <T variant="h3">{o.done_today} of {o.due_today} done</T>
-                <T variant="small" muted>Best streak {o.best_streak} · avg completion {Math.round(o.average_completion)}%</T>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: c.mutedForeground, fontSize: 11, fontWeight: "700", letterSpacing: 1.2 }}>TODAY</Text>
+                <Text style={{ color: c.foreground, fontSize: 22, fontWeight: "800", letterSpacing: -0.5, marginTop: 2, fontVariant: ["tabular-nums"] }}>
+                  {o.done_today} of {o.due_today} done
+                </Text>
+                <Text style={{ color: c.mutedForeground, fontSize: 13, marginTop: 2 }}>
+                  {o.due_today === 0 ? "Nothing due today" : o.done_today >= o.due_today ? "Every habit checked in" : `${o.due_today - o.done_today} left to check in`}
+                </Text>
               </View>
             </Row>
+            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: c.border, paddingTop: 14 }}>
+              <OverviewStat icon="flame" label="Best streak" value={String(o.best_streak)} />
+              <OverviewStat icon="chart" label="Avg completion" value={`${Math.round(o.average_completion)}%`} last />
+            </View>
             <Heatmap data={o.calendar} />
-          </Card>
+          </View>
         ) : null}
 
         <Segmented
@@ -112,28 +103,67 @@ export function HabitsScreen() {
         {habits.map((h) => {
           const done = h.frequency === "daily" ? h.done_today : h.done_this_week;
           return (
-            <Card key={h.id} style={{ padding: 14, gap: 12 }} onPress={() => setDetail(h)}>
-              <Row gap={12}>
-                <IconTile name={habitIcon(h.icon)} color={h.color} size={44} />
-                <View style={{ flex: 1, gap: 3 }}>
-                  <T weight="700" numberOfLines={1}>{h.name}</T>
-                  <Row gap={6}>
-                    <Badge label={h.frequency === "daily" ? "Daily" : "Weekly"} color={h.color} />
-                    <T variant="caption" muted>🔥 {h.current_streak} · best {h.best_streak} · {Math.round(h.completion_rate)}%</T>
-                  </Row>
+            <Pressable
+              key={h.id}
+              onPress={() => setDetail(h)}
+              style={({ pressed }) => ({
+                backgroundColor: pressed ? c.muted : c.card,
+                borderRadius: 22,
+                borderWidth: 1,
+                borderColor: c.border,
+                padding: 16,
+                gap: 16,
+                opacity: h.archived ? 0.75 : 1,
+              })}
+            >
+              <Row gap={14}>
+                <View style={{ width: 46, height: 46, borderRadius: 15, backgroundColor: c.muted, alignItems: "center", justifyContent: "center" }}>
+                  <Glyph name={habitGlyph(h.icon)} size={24} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: c.foreground, fontSize: 16, fontWeight: "700" }} numberOfLines={1}>{h.name}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 5 }}>
+                    <View style={{ paddingHorizontal: 8, height: 20, borderRadius: 10, borderWidth: 1, borderColor: c.border, justifyContent: "center" }}>
+                      <Text style={{ color: c.mutedForeground, fontSize: 11, fontWeight: "700" }}>{h.frequency === "daily" ? "Daily" : "Weekly"}</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <Glyph name="flame" size={14} weight={h.current_streak ? "fill" : "regular"} color={h.current_streak ? c.foreground : c.mutedForeground} />
+                      <Text style={{ color: c.foreground, fontSize: 12, fontWeight: "700", fontVariant: ["tabular-nums"] }}>{h.current_streak}</Text>
+                    </View>
+                    <Text style={{ flexShrink: 1, color: c.mutedForeground, fontSize: 12, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
+                      Best {h.best_streak} · {Math.round(h.completion_rate)}%
+                    </Text>
+                  </View>
                 </View>
                 {!h.archived ? (
                   <Pressable
                     onPress={() => toggle(h)}
                     hitSlop={8}
-                    style={{ width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", backgroundColor: done ? h.color : alpha(h.color, 0.12), borderWidth: 2, borderColor: h.color }}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: done }}
+                    accessibilityLabel={`Check in ${h.name}`}
+                    style={({ pressed }) => ({
+                      width: 48,
+                      height: 48,
+                      borderRadius: 24,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: done ? c.foreground : "transparent",
+                      borderWidth: done ? 0 : 1.5,
+                      borderColor: c.input,
+                      transform: [{ scale: pressed ? 0.92 : 1 }],
+                    })}
                   >
-                    <Icon name="check" size={22} color={done ? "#fff" : h.color} />
+                    <Glyph name="check" size={22} weight="bold" color={done ? c.background : c.mutedForeground} />
                   </Pressable>
-                ) : null}
+                ) : (
+                  <View style={{ paddingHorizontal: 10, height: 26, borderRadius: 13, backgroundColor: c.muted, justifyContent: "center" }}>
+                    <Text style={{ color: c.mutedForeground, fontSize: 11, fontWeight: "700" }}>Archived</Text>
+                  </View>
+                )}
               </Row>
               <WeekDots habit={h} />
-            </Card>
+            </Pressable>
           );
         })}
       </Screen>
@@ -157,19 +187,31 @@ function WeekDots({ habit }: { habit: Habit }) {
   const today = new Date();
   const days = Array.from({ length: 7 }, (_, i) => addDays(today, i - 6));
   return (
-    <Row style={{ justifyContent: "space-between" }}>
+    <View style={{ flexDirection: "row", justifyContent: "space-between", paddingTop: 14, borderTopWidth: 1, borderTopColor: c.border }}>
       {days.map((d) => {
         const on = logs.has(toISODate(d));
+        const today = isToday(d);
         return (
-          <View key={d.toISOString()} style={{ alignItems: "center", gap: 4 }}>
-            <T variant="caption" muted style={{ fontSize: 10 }}>{format(d, "EEEEE")}</T>
-            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: on ? habit.color : c.muted, alignItems: "center", justifyContent: "center", borderWidth: isToday(d) ? 2 : 0, borderColor: alpha(habit.color, 0.6) }}>
-              {on ? <Icon name="check" size={13} color="#fff" /> : null}
+          <View key={d.toISOString()} style={{ alignItems: "center", gap: 6 }}>
+            <Text style={{ color: today ? c.foreground : c.mutedForeground, fontSize: 11, fontWeight: today ? "800" : "600" }}>{format(d, "EEEEE")}</Text>
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 9,
+                backgroundColor: on ? c.foreground : c.muted,
+                alignItems: "center",
+                justifyContent: "center",
+                borderWidth: today && !on ? 1.5 : 0,
+                borderColor: c.foreground,
+              }}
+            >
+              {on ? <Glyph name="check" size={13} weight="bold" color={c.background} /> : null}
             </View>
           </View>
         );
       })}
-    </Row>
+    </View>
   );
 }
 
@@ -193,14 +235,23 @@ function Heatmap({ data }: { data: { date: string; count: number }[] }) {
               return (
                 <View
                   key={j}
-                  style={{ aspectRatio: 1, borderRadius: 3, backgroundColor: !cell ? "transparent" : cell.count ? alpha(c.success, 0.25 + v * 0.75) : c.muted }}
+                  style={{ aspectRatio: 1, borderRadius: 3, backgroundColor: c.foreground, opacity: !cell ? 0 : cell.count ? 0.3 + v * 0.7 : 0.07 }}
                 />
               );
             })}
           </View>
         ))}
       </View>
-      <T variant="caption" muted>Check-ins over the last 12 weeks</T>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ color: c.mutedForeground, fontSize: 12 }}>Last 12 weeks</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <Text style={{ color: c.mutedForeground, fontSize: 11 }}>Less</Text>
+          {[0.07, 0.35, 0.6, 1].map((op) => (
+            <View key={op} style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c.foreground, opacity: op }} />
+          ))}
+          <Text style={{ color: c.mutedForeground, fontSize: 11 }}>More</Text>
+        </View>
+      </View>
     </View>
   );
 }
@@ -252,7 +303,7 @@ function HabitDetail({ habit, onClose, onEdit }: { habit: Habit | null; onClose:
       {h ? (
         <>
           <Row gap={10}>
-            <StatBox label="Current streak" value={`🔥 ${h.current_streak}`} />
+            <StatBox label="Current streak" value={String(h.current_streak)} flame />
             <StatBox label="Best streak" value={String(h.best_streak)} />
             <StatBox label={h.frequency === "daily" ? "Last 30 days" : "Last 12 weeks"} value={`${Math.round(h.completion_rate)}%`} />
           </Row>
@@ -280,13 +331,13 @@ function HabitDetail({ habit, onClose, onEdit }: { habit: Habit | null; onClose:
                         borderRadius: 10,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: on ? h.color : "transparent",
-                        borderWidth: isToday(d) ? 2 : 0,
-                        borderColor: h.color,
+                        backgroundColor: on ? c.foreground : "transparent",
+                        borderWidth: isToday(d) && !on ? 1.5 : 0,
+                        borderColor: c.foreground,
                         opacity: !isSameMonth(d, month) ? 0.3 : future ? 0.4 : 1,
                       }}
                     >
-                      <T variant="small" weight={on ? "700" : "400"} color={on ? "#fff" : c.foreground}>{format(d, "d")}</T>
+                      <T variant="small" weight={on ? "800" : "500"} color={on ? c.background : c.foreground}>{format(d, "d")}</T>
                     </View>
                   </Pressable>
                 );
@@ -305,12 +356,30 @@ function HabitDetail({ habit, onClose, onEdit }: { habit: Habit | null; onClose:
   );
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value, flame }: { label: string; value: string; flame?: boolean }) {
   const c = useColors();
   return (
-    <View style={{ flex: 1, backgroundColor: c.card, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: c.border }}>
-      <T variant="h3">{value}</T>
-      <T variant="caption" muted numberOfLines={1}>{label}</T>
+    <View style={{ flex: 1, backgroundColor: c.card, borderRadius: 16, padding: 12, borderWidth: 1, borderColor: c.border }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+        {flame ? <Glyph name="flame" size={18} weight="fill" /> : null}
+        <Text style={{ color: c.foreground, fontSize: 20, fontWeight: "800", fontVariant: ["tabular-nums"] }}>{value}</Text>
+      </View>
+      <Text style={{ color: c.mutedForeground, fontSize: 11, fontWeight: "600", marginTop: 2 }} numberOfLines={1}>{label}</Text>
+    </View>
+  );
+}
+
+function OverviewStat({ icon, label, value, last }: { icon: "flame" | "chart"; label: string; value: string; last?: boolean }) {
+  const c = useColors();
+  return (
+    <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10, borderRightWidth: last ? 0 : 1, borderRightColor: c.border, marginRight: last ? 0 : 14 }}>
+      <View style={{ width: 34, height: 34, borderRadius: 11, backgroundColor: c.muted, alignItems: "center", justifyContent: "center" }}>
+        <Glyph name={icon} size={18} weight="fill" />
+      </View>
+      <View>
+        <Text style={{ color: c.foreground, fontSize: 17, fontWeight: "800", fontVariant: ["tabular-nums"] }}>{value}</Text>
+        <Text style={{ color: c.mutedForeground, fontSize: 11, fontWeight: "600" }}>{label}</Text>
+      </View>
     </View>
   );
 }

@@ -8,6 +8,7 @@ import { useUser } from "../auth";
 import { HabitForm, ReminderForm, TaskForm, TransactionForm } from "../forms";
 import { Glyph, type GlyphName, habitGlyph } from "../icons";
 import { invalidate, useQuery } from "../query";
+import { type Colors, LIGHT_COLORS, useColors, useIsDark } from "../theme";
 import type { Dashboard, Habit, Reminder, Task } from "../types";
 import { Avatar, ErrorBox, Loading, Screen, errorMessage, toast } from "../ui";
 import { formatMoney, greeting, parseDateOnly, timeAgo } from "../utils";
@@ -15,23 +16,52 @@ import { formatMoney, greeting, parseDateOnly, timeAgo } from "../utils";
 /* Home — black & white. One dark "focus" card carries today's state; everything else sits on
    white surfaces with hairline borders, so the eye goes to numbers, not decoration. */
 
-const K = {
-  ink: "#0A0A0A",
-  ink2: "#262626",
-  sub: "#737373",
-  faint: "#A3A3A3",
-  line: "#EBEBEB",
-  wash: "#F4F4F4",
-  card: "#FFFFFF",
-  bg: "#FAFAFA",
-  danger: "#D92D20",
-};
+/* Theme-aware palette. "ink" is the strongest colour (black in light mode, white in dark);
+   "onInk" is what sits on top of it. Set once per render of the screen (see usePalette). */
+function palette(c: Colors, dark: boolean) {
+  return {
+    ink: c.foreground,
+    ink2: dark ? "#E5E5E5" : "#262626",
+    sub: c.mutedForeground,
+    faint: dark ? "#737373" : "#A3A3A3",
+    line: c.border,
+    wash: c.muted,
+    card: c.card,
+    bg: c.background,
+    danger: c.danger,
+    strong: dark ? "#404040" : "#D4D4D4",
+    chart2: dark ? "#525252" : "#CFCFCF",
+    pressed: dark ? "#1A1A1A" : "#FBFBFB",
+    onInk: dark ? "#0A0A0A" : "#FFFFFF",
+    onInkSub: dark ? "#6B6B6B" : "#8C8C8C",
+    onInkMuted: dark ? "#525252" : "#A3A3A3",
+    onInkSoft: dark ? "#404040" : "#D4D4D4",
+    onInkA: (a: number) => (dark ? `rgba(10,10,10,${a})` : `rgba(255,255,255,${a})`),
+  };
+}
+
+let K = palette(LIGHT_COLORS, false);
+let s = makeStyles(K);
+let lastScheme: boolean | null = null;
+
+/** Point K and s at the current theme. Children render in the same pass, so they see it too. */
+function usePalette() {
+  const c = useColors();
+  const dark = useIsDark();
+  if (lastScheme !== dark) {
+    K = palette(c, dark);
+    s = makeStyles(K);
+    lastScheme = dark;
+  }
+}
+
 
 const PAD = 20;
 
 type Sheet = null | "task" | "expense" | "habit" | "reminder";
 
 export function DashboardScreen() {
+  usePalette();
   const user = useUser();
   const nav = useNavigation<any>();
   const { data, error, loading, refreshing, refresh, mutate } = useQuery<Dashboard>("/api/dashboard");
@@ -89,7 +119,7 @@ export function DashboardScreen() {
 
         {data ? (
           <>
-            <FocusCard data={data} onOpenTasks={() => nav.navigate("Tasks")} />
+            <FocusCard data={data} onOpenMoney={() => nav.navigate("Money")} onOpenTasks={() => nav.navigate("Tasks")} />
 
             {/* ------------------------------------------------ quick add */}
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -202,46 +232,119 @@ export function DashboardScreen() {
 
 // ================================================================ focus card
 
-function FocusCard({ data, onOpenTasks }: { data: Dashboard; onOpenTasks: () => void }) {
+/** The one dark card: money first (balance + today's spending), today's tasks as a strip below. */
+function FocusCard({ data, onOpenMoney, onOpenTasks }: { data: Dashboard; onOpenMoney: () => void; onOpenTasks: () => void }) {
+  const f = data.finance;
   const total = data.tasks.due_today;
   const done = data.tasks.due_today_completed;
-  const left = total - done;
-  const headline = total === 0 ? "Nothing due" : left === 0 ? "All done" : `${left} to go`;
+  const negative = f.month_balance < 0;
   return (
-    <Pressable onPress={onOpenTasks} style={({ pressed }) => [s.focus, pressed && { opacity: 0.94 }]}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={[s.eyebrow, { color: "#8C8C8C" }]}>TODAY'S FOCUS</Text>
-        <View style={s.focusChip}>
-          <Glyph name="list-checks" size={14} color="#FFFFFF" weight="bold" />
-          <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>{headline}</Text>
+    <View style={s.focus}>
+      {/* ---- balance */}
+      <Pressable onPress={onOpenMoney} style={({ pressed }) => pressed && { opacity: 0.85 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={[s.eyebrow, { color: K.onInkSub }]}>CURRENT BALANCE · {format(new Date(), "MMM").toUpperCase()}</Text>
+          <View style={s.focusChip}>
+            <Glyph name="wallet" size={14} color={K.onInk} weight="bold" />
+            <Text style={{ color: K.onInk, fontSize: 12, fontWeight: "700" }}>Money</Text>
+            <Glyph name="caret-right" size={11} color={K.onInk} weight="bold" />
+          </View>
         </View>
-      </View>
-
-      <View style={{ flexDirection: "row", alignItems: "flex-end", marginTop: 18 }}>
-        <Text style={{ color: "#FFFFFF", fontSize: 64, lineHeight: 66, fontWeight: "800", letterSpacing: -3, fontVariant: ["tabular-nums"] }}>{done}</Text>
-        <Text style={{ color: "#6B6B6B", fontSize: 28, lineHeight: 40, fontWeight: "700", marginLeft: 4, fontVariant: ["tabular-nums"] }}>/{total}</Text>
-        <Text style={{ color: "#A3A3A3", fontSize: 14, lineHeight: 36, marginLeft: 10, flex: 1 }} numberOfLines={1}>
-          tasks done today
+        <Text
+          style={{
+            color: negative ? "#FF6B5E" : K.onInk,
+            fontSize: 46,
+            lineHeight: 54,
+            fontWeight: "800",
+            letterSpacing: -1.8,
+            marginTop: 14,
+            fontVariant: ["tabular-nums"],
+          }}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+        >
+          {formatMoney(f.month_balance, f.currency)}
         </Text>
+        <Text style={{ color: K.onInkSub, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
+          {formatMoney(f.month_income, f.currency, true)} in · {formatMoney(f.month_expense, f.currency, true)} out this month
+        </Text>
+      </Pressable>
+
+      {/* ---- today */}
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
+        <TodayMoney icon="arrow-out" label="Spent today" value={formatMoney(f.today_expense, f.currency)} strong />
+        <TodayMoney icon="arrow-in" label="Earned today" value={formatMoney(f.today_income, f.currency)} />
       </View>
 
-      <Segments total={total} done={done} />
+      <View style={{ height: 1, backgroundColor: K.onInkA(0.1), marginVertical: 18 }} />
 
-      <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.1)", marginVertical: 18 }} />
+      {/* ---- tasks strip */}
+      <Pressable onPress={onOpenTasks} style={({ pressed }) => pressed && { opacity: 0.85 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+            <Text style={{ color: K.onInk, fontSize: 15, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
+              {done}/{total}
+            </Text>
+            <Text style={{ color: K.onInkMuted, fontSize: 13 }}>tasks today</Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+            {data.tasks.overdue ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF5A4E" }} />
+                <Text style={{ color: K.onInkSoft, fontSize: 12, fontWeight: "600" }}>{data.tasks.overdue} overdue</Text>
+              </View>
+            ) : null}
+            <Text style={{ color: K.onInkSoft, fontSize: 12, fontWeight: "600" }}>
+              Habits {data.habits.done}/{data.habits.total}
+            </Text>
+          </View>
+        </View>
+        <Segments total={total} done={done} />
+      </Pressable>
+    </View>
+  );
+}
 
-      <View style={{ flexDirection: "row" }}>
-        <FocusStat label="Overdue" value={String(data.tasks.overdue)} alert={data.tasks.overdue > 0} />
-        <FocusStat label="Habits" value={`${data.habits.done}/${data.habits.total}`} />
-        <FocusStat label="Spent today" value={formatMoney(data.finance.today_expense, data.finance.currency, true)} last />
+function TodayMoney({ icon, label, value, strong }: { icon: GlyphName; label: string; value: string; strong?: boolean }) {
+  return (
+    <View
+      style={{
+        flex: 1,
+        padding: 14,
+        borderRadius: 18,
+        backgroundColor: strong ? K.onInk : K.onInkA(0.08),
+      }}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <View
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 8,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: strong ? K.ink : K.onInkA(0.12),
+          }}
+        >
+          <Glyph name={icon} size={13} color={K.onInk} weight="bold" />
+        </View>
+        <Text style={{ color: strong ? K.sub : K.onInkMuted, fontSize: 12, fontWeight: "700" }}>{label}</Text>
       </View>
-    </Pressable>
+      <Text
+        style={{ color: strong ? K.ink : K.onInk, fontSize: 22, fontWeight: "800", letterSpacing: -0.6, marginTop: 10, fontVariant: ["tabular-nums"] }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+      >
+        {value}
+      </Text>
+    </View>
   );
 }
 
 /** One segment per task when there are few; a continuous bar beyond that. */
 function Segments({ total, done }: { total: number; done: number }) {
-  const on = "#FFFFFF";
-  const off = "rgba(255,255,255,0.14)";
+  const on = K.onInk;
+  const off = K.onInkA(0.14);
   if (total === 0) return <View style={{ height: 6, borderRadius: 3, backgroundColor: off, marginTop: 16 }} />;
   if (total > 12) {
     return (
@@ -259,20 +362,6 @@ function Segments({ total, done }: { total: number; done: number }) {
   );
 }
 
-function FocusStat({ label, value, alert, last }: { label: string; value: string; alert?: boolean; last?: boolean }) {
-  return (
-    <View style={{ flex: 1, paddingRight: 10, borderRightWidth: last ? 0 : 1, borderRightColor: "rgba(255,255,255,0.1)", marginRight: last ? 0 : 12 }}>
-      <Text style={{ color: "#8C8C8C", fontSize: 11, fontWeight: "600", letterSpacing: 0.3 }}>{label}</Text>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 }}>
-        {alert ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF5A4E" }} /> : null}
-        <Text style={{ color: "#FFFFFF", fontSize: 17, fontWeight: "800", fontVariant: ["tabular-nums"] }} numberOfLines={1} adjustsFontSizeToFit>
-          {value}
-        </Text>
-      </View>
-    </View>
-  );
-}
-
 // ================================================================ quick actions
 
 function QuickAction({ icon, label, onPress }: { icon: GlyphName; label: string; onPress: () => void }) {
@@ -283,7 +372,7 @@ function QuickAction({ icon, label, onPress }: { icon: GlyphName; label: string;
           <View style={[s.quick, pressed && { backgroundColor: K.wash, transform: [{ scale: 0.96 }] }]}>
             <Glyph name={icon} size={26} />
             <View style={s.quickPlus}>
-              <Glyph name="plus" size={9} color="#FFFFFF" weight="bold" />
+              <Glyph name="plus" size={9} color={K.onInk} weight="bold" />
             </View>
           </View>
           <Text style={{ color: K.ink2, fontSize: 12, fontWeight: "600" }}>{label}</Text>
@@ -313,18 +402,19 @@ function MoneyCard({ data, onOpen }: { data: Dashboard; onOpen: () => void }) {
         </View>
       </View>
 
-      <Text style={{ color: K.sub, fontSize: 12, fontWeight: "600", marginTop: 18, letterSpacing: 0.3 }}>Balance this month</Text>
+      {/* The balance is the headline of the dark card above; here, where the money went. */}
+      <Text style={{ color: K.sub, fontSize: 12, fontWeight: "600", marginTop: 18, letterSpacing: 0.3 }}>Spent this month</Text>
       <Text
-        style={{ color: f.month_balance < 0 ? K.danger : K.ink, fontSize: 34, fontWeight: "800", letterSpacing: -1.2, marginTop: 2, fontVariant: ["tabular-nums"] }}
+        style={{ color: K.ink, fontSize: 34, fontWeight: "800", letterSpacing: -1.2, marginTop: 2, fontVariant: ["tabular-nums"] }}
         numberOfLines={1}
         adjustsFontSizeToFit
       >
-        {formatMoney(f.month_balance, f.currency)}
+        {formatMoney(f.month_expense, f.currency)}
       </Text>
 
       <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
-        <Flow icon="arrow-in" label="In" value={formatMoney(f.month_income, f.currency, true)} />
-        <Flow icon="arrow-out" label="Out" value={formatMoney(f.month_expense, f.currency, true)} />
+        <Flow icon="arrow-in" label="Income" value={formatMoney(f.month_income, f.currency, true)} />
+        <Flow icon="chart" label="Daily average" value={formatMoney(f.month_expense / new Date().getDate(), f.currency, true)} />
       </View>
 
       {budget ? (
@@ -373,7 +463,7 @@ function TaskRow({ task, first, onToggle }: { task: Task; first: boolean; onTogg
       style={({ pressed }) => [
         { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
         !first && { borderTopWidth: 1, borderTopColor: K.line },
-        pressed && { backgroundColor: "#FBFBFB" },
+        pressed && { backgroundColor: K.pressed },
       ]}
     >
       <View
@@ -382,13 +472,13 @@ function TaskRow({ task, first, onToggle }: { task: Task; first: boolean; onTogg
           height: 24,
           borderRadius: 8,
           borderWidth: task.completed ? 0 : 1.5,
-          borderColor: "#C7C7C7",
+          borderColor: K.strong,
           backgroundColor: task.completed ? K.ink : "transparent",
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        {task.completed ? <Glyph name="check" size={14} color="#FFFFFF" weight="bold" /> : null}
+        {task.completed ? <Glyph name="check" size={14} color={K.onInk} weight="bold" /> : null}
       </View>
       <View style={{ flex: 1 }}>
         <Text
@@ -401,7 +491,7 @@ function TaskRow({ task, first, onToggle }: { task: Task; first: boolean; onTogg
       </View>
       {task.priority === "high" && !task.completed ? (
         <View style={{ paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, backgroundColor: K.ink }}>
-          <Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 }}>HIGH</Text>
+          <Text style={{ color: K.onInk, fontSize: 10, fontWeight: "800", letterSpacing: 0.5 }}>HIGH</Text>
         </View>
       ) : null}
       {due ? (
@@ -431,10 +521,10 @@ function HabitTile({ habit, onPress }: { habit: Habit; onPress: () => void }) {
             borderRadius: 13,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: done ? "rgba(255,255,255,0.12)" : K.wash,
+            backgroundColor: done ? K.onInkA(0.12) : K.wash,
           }}
         >
-          <Glyph name={habitGlyph(habit.icon)} size={22} color={done ? "#FFFFFF" : K.ink} />
+          <Glyph name={habitGlyph(habit.icon)} size={22} color={done ? K.onInk : K.ink} />
         </View>
         <View
           style={{
@@ -443,20 +533,20 @@ function HabitTile({ habit, onPress }: { habit: Habit; onPress: () => void }) {
             borderRadius: 11,
             alignItems: "center",
             justifyContent: "center",
-            backgroundColor: done ? "#FFFFFF" : "transparent",
+            backgroundColor: done ? K.onInk : "transparent",
             borderWidth: done ? 0 : 1.5,
-            borderColor: "#D4D4D4",
+            borderColor: K.strong,
           }}
         >
           {done ? <Glyph name="check" size={12} color={K.ink} weight="bold" /> : null}
         </View>
       </View>
-      <Text style={{ color: done ? "#FFFFFF" : K.ink, fontSize: 14, fontWeight: "700", marginTop: 14 }} numberOfLines={1}>
+      <Text style={{ color: done ? K.onInk : K.ink, fontSize: 14, fontWeight: "700", marginTop: 14 }} numberOfLines={1}>
         {habit.name}
       </Text>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 4 }}>
-        <Glyph name="flame" size={14} color={done ? "#FFFFFF" : K.sub} weight={habit.current_streak ? "fill" : "regular"} />
-        <Text style={{ color: done ? "#BDBDBD" : K.sub, fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
+        <Glyph name="flame" size={14} color={done ? K.onInk : K.sub} weight={habit.current_streak ? "fill" : "regular"} />
+        <Text style={{ color: done ? K.onInkMuted : K.sub, fontSize: 12, fontWeight: "600", fontVariant: ["tabular-nums"] }}>
           {habit.current_streak} {habit.frequency === "daily" ? "day" : "week"}
           {habit.current_streak === 1 ? "" : "s"}
         </Text>
@@ -513,7 +603,7 @@ function WeekCard({ data }: { data: Dashboard }) {
         </View>
         <View style={{ gap: 4 }}>
           <Legend swatch={K.ink} label="Tasks" />
-          <Legend swatch="#CFCFCF" label="Habits" />
+          <Legend swatch={K.chart2} label="Habits" />
         </View>
       </View>
 
@@ -527,7 +617,7 @@ function WeekCard({ data }: { data: Dashboard }) {
             <View key={d.date} style={{ flex: 1, alignItems: "center", gap: 6 }}>
               <View style={{ height: H, width: "100%", justifyContent: "flex-end", alignItems: "center" }}>
                 <View style={{ width: "72%", borderRadius: 6, overflow: "hidden", backgroundColor: K.wash, height: H, justifyContent: "flex-end" }}>
-                  <View style={{ height: habitsH, backgroundColor: "#CFCFCF" }} />
+                  <View style={{ height: habitsH, backgroundColor: K.chart2 }} />
                   <View style={{ height: tasksH, backgroundColor: K.ink }} />
                 </View>
               </View>
@@ -573,7 +663,7 @@ function MonthStat({ label, value }: { label: string; value: string }) {
 function Surface({ children, style, onPress }: { children: React.ReactNode; style?: ViewStyle; onPress?: () => void }) {
   if (onPress) {
     return (
-      <Pressable onPress={onPress} style={({ pressed }) => [s.surface, style, pressed && { backgroundColor: "#FCFCFC" }]}>
+      <Pressable onPress={onPress} style={({ pressed }) => [s.surface, style, pressed && { backgroundColor: K.pressed }]}>
         {children}
       </Pressable>
     );
@@ -600,7 +690,7 @@ function SectionHeader({ title, meta, action, onAction }: { title: string; meta?
 
 function EmptyState({ icon, title, text, action, onAction }: { icon: GlyphName; title: string; text: string; action: string; onAction: () => void }) {
   return (
-    <View style={[s.surface, { borderStyle: "dashed", borderColor: "#DADADA", flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }]}>
+    <View style={[s.surface, { borderStyle: "dashed", borderColor: K.strong, flexDirection: "row", alignItems: "center", gap: 14, padding: 16 }]}>
       <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: K.wash, alignItems: "center", justifyContent: "center" }}>
         <Glyph name={icon} size={26} />
       </View>
@@ -609,7 +699,7 @@ function EmptyState({ icon, title, text, action, onAction }: { icon: GlyphName; 
         <Text style={{ color: K.sub, fontSize: 13, marginTop: 2 }}>{text}</Text>
       </View>
       <Pressable onPress={onAction} style={({ pressed }) => ({ paddingHorizontal: 12, height: 34, borderRadius: 10, backgroundColor: K.ink, justifyContent: "center", opacity: pressed ? 0.8 : 1 })}>
-        <Text style={{ color: "#FFFFFF", fontSize: 12, fontWeight: "700" }}>{action}</Text>
+        <Text style={{ color: K.onInk, fontSize: 12, fontWeight: "700" }}>{action}</Text>
       </Pressable>
     </View>
   );
@@ -622,7 +712,7 @@ function LinkRow({ icon, title, text, onPress, first }: { icon: GlyphName; title
       style={({ pressed }) => [
         { flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
         !first && { borderTopWidth: 1, borderTopColor: K.line },
-        pressed && { backgroundColor: "#FBFBFB" },
+        pressed && { backgroundColor: K.pressed },
       ]}
     >
       <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: K.wash, alignItems: "center", justifyContent: "center" }}>
@@ -658,11 +748,12 @@ function RoundButton({ children, onPress, label }: { children: React.ReactNode; 
   );
 }
 
-const s = {
+function makeStyles(K: ReturnType<typeof palette>) {
+  return {
   eyebrow: { color: K.sub, fontSize: 11, fontWeight: "700", letterSpacing: 1.4 },
   dot: { position: "absolute", top: 11, right: 12, width: 8, height: 8, borderRadius: 4, backgroundColor: K.ink, borderWidth: 1.5, borderColor: K.card },
   focus: { backgroundColor: K.ink, borderRadius: 28, padding: 22 },
-  focusChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.1)" },
+  focusChip: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 10, height: 28, borderRadius: 14, backgroundColor: K.onInkA(0.1) },
   quick: {
     width: 64,
     height: 64,
@@ -688,5 +779,6 @@ const s = {
   },
   surface: { backgroundColor: K.card, borderRadius: 24, borderWidth: 1, borderColor: K.line, overflow: "hidden" },
   habitTile: { width: 140, padding: 14, borderRadius: 22, borderWidth: 1, borderColor: K.line, backgroundColor: K.card },
-  habitAdd: { borderStyle: "dashed", borderColor: "#D4D4D4", backgroundColor: "transparent", alignItems: "center", justifyContent: "center", gap: 8 },
-} as const;
+  habitAdd: { borderStyle: "dashed", borderColor: K.strong, backgroundColor: "transparent", alignItems: "center", justifyContent: "center", gap: 8 },
+  } as const;
+}

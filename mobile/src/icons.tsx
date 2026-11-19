@@ -6,6 +6,8 @@
 import type { Icon, IconProps, IconWeight } from "phosphor-react-native";
 import * as React from "react";
 
+import { useColors } from "./theme";
+
 /* Per-icon files via require(): Metro bundles only these, and TypeScript uses the package's
    published types instead of type-checking its source. */
 const ArrowDownLeftIcon: Icon = require("phosphor-react-native/src/icons/ArrowDownLeft").ArrowDownLeftIcon;
@@ -17,7 +19,26 @@ const BookOpenTextIcon: Icon = require("phosphor-react-native/src/icons/BookOpen
 const CalendarDotsIcon: Icon = require("phosphor-react-native/src/icons/CalendarDots").CalendarDotsIcon;
 const CaretRightIcon: Icon = require("phosphor-react-native/src/icons/CaretRight").CaretRightIcon;
 const ChartBarIcon: Icon = require("phosphor-react-native/src/icons/ChartBar").ChartBarIcon;
+const CameraIcon: Icon = require("phosphor-react-native/src/icons/Camera").CameraIcon;
+const CaretLeftIcon: Icon = require("phosphor-react-native/src/icons/CaretLeft").CaretLeftIcon;
+const CircleHalfIcon: Icon = require("phosphor-react-native/src/icons/CircleHalf").CircleHalfIcon;
+const DeviceMobileIcon: Icon = require("phosphor-react-native/src/icons/DeviceMobile").DeviceMobileIcon;
+const DownloadSimpleIcon: Icon = require("phosphor-react-native/src/icons/DownloadSimple").DownloadSimpleIcon;
+const HardDrivesIcon: Icon = require("phosphor-react-native/src/icons/HardDrives").HardDrivesIcon;
+const InfoIcon: Icon = require("phosphor-react-native/src/icons/Info").InfoIcon;
+const LockKeyIcon: Icon = require("phosphor-react-native/src/icons/LockKey").LockKeyIcon;
+const MoonStarsIcon: Icon = require("phosphor-react-native/src/icons/MoonStars").MoonStarsIcon;
+const PencilSimpleIcon: Icon = require("phosphor-react-native/src/icons/PencilSimple").PencilSimpleIcon;
+const ShieldCheckIcon: Icon = require("phosphor-react-native/src/icons/ShieldCheck").ShieldCheckIcon;
+const SignOutIcon: Icon = require("phosphor-react-native/src/icons/SignOut").SignOutIcon;
+const SunDimIcon: Icon = require("phosphor-react-native/src/icons/SunDim").SunDimIcon;
+const TrashIcon: Icon = require("phosphor-react-native/src/icons/Trash").TrashIcon;
+const UserIcon: Icon = require("phosphor-react-native/src/icons/User").UserIcon;
+const BellSimpleIcon: Icon = require("phosphor-react-native/src/icons/BellSimple").BellSimpleIcon;
 const CheckIcon: Icon = require("phosphor-react-native/src/icons/Check").CheckIcon;
+const CheckCircleIcon: Icon = require("phosphor-react-native/src/icons/CheckCircle").CheckCircleIcon;
+const CoinsIcon: Icon = require("phosphor-react-native/src/icons/Coins").CoinsIcon;
+const SquaresFourIcon: Icon = require("phosphor-react-native/src/icons/SquaresFour").SquaresFourIcon;
 const CheckSquareOffsetIcon: Icon = require("phosphor-react-native/src/icons/CheckSquareOffset").CheckSquareOffsetIcon;
 const ClockCounterClockwiseIcon: Icon = require("phosphor-react-native/src/icons/ClockCounterClockwise").ClockCounterClockwiseIcon;
 const CodeIcon: Icon = require("phosphor-react-native/src/icons/Code").CodeIcon;
@@ -54,7 +75,26 @@ const ICONS = {
   calendar: CalendarDotsIcon,
   "caret-right": CaretRightIcon,
   chart: ChartBarIcon,
+  "camera": CameraIcon,
+  "caret-left": CaretLeftIcon,
+  "circle-half": CircleHalfIcon,
+  "device": DeviceMobileIcon,
+  "download": DownloadSimpleIcon,
+  "server": HardDrivesIcon,
+  "info": InfoIcon,
+  "lock": LockKeyIcon,
+  "moon-stars": MoonStarsIcon,
+  "pencil": PencilSimpleIcon,
+  "shield": ShieldCheckIcon,
+  "sign-out": SignOutIcon,
+  "sun-dim": SunDimIcon,
+  "trash": TrashIcon,
+  "user": UserIcon,
+  "bell-simple": BellSimpleIcon,
   check: CheckIcon,
+  "check-circle": CheckCircleIcon,
+  coins: CoinsIcon,
+  squares: SquaresFourIcon,
   "check-square": CheckSquareOffsetIcon,
   history: ClockCounterClockwiseIcon,
   code: CodeIcon,
@@ -86,12 +126,13 @@ export type GlyphName = keyof typeof ICONS;
 export function Glyph({
   name,
   size = 22,
-  color = "#0A0A0A",
+  color,
   weight = "duotone",
   ...rest
 }: { name: GlyphName; size?: number; color?: string; weight?: IconWeight } & Omit<IconProps, "size" | "color" | "weight">) {
+  const c = useColors();
   const C = ICONS[name];
-  return <C size={size} color={color} weight={weight} {...rest} />;
+  return <C size={size} color={color ?? c.foreground} weight={weight} {...rest} />;
 }
 
 /** Habit icon keys stored by the API -> Phosphor glyphs. */
