@@ -12,45 +12,53 @@ def iso(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def test_forgot_password_sends_email_with_link(client, monkeypatch):
+def test_forgot_password_emails_a_code(client, monkeypatch):
     sent = []
-    monkeypatch.setattr(
-        "app.routers.auth.send_password_reset", lambda *a: sent.append(a) or True
-    )
+    monkeypatch.setattr("app.routers.auth.send_password_reset_code", lambda *a: sent.append(a) or True)
     register(client)
     r = client.post("/api/auth/forgot-password", json={"email": "sara@example.com"})
-    token = r.json()["dev_reset_token"]
+    code = r.json()["dev_reset_code"]
     assert len(sent) == 1
-    to, name, link, minutes = sent[0]
-    assert to == "sara@example.com" and name == "Sara"
-    assert link.startswith(settings.frontend_url) and token in link
+    to, name, emailed, minutes = sent[0]
+    assert to == "sara@example.com" and name == "Sara" and emailed == code
 
-    # A newer request invalidates the older link.
-    token2 = client.post("/api/auth/forgot-password", json={"email": "sara@example.com"}).json()[
-        "dev_reset_token"
-    ]
+    # A newer request invalidates the older code.
+    code2 = client.post("/api/auth/forgot-password", json={"email": "sara@example.com"}).json()["dev_reset_code"]
+    if code2 != code:
+        assert client.post(
+            "/api/auth/reset-password", json={"email": "sara@example.com", "code": code, "new_password": "newpass99"}
+        ).status_code == 400
     assert client.post(
-        "/api/auth/reset-password", json={"token": token, "new_password": "newpass99"}
-    ).status_code == 400
-    assert client.post(
-        "/api/auth/reset-password", json={"token": token2, "new_password": "newpass99"}
+        "/api/auth/reset-password", json={"email": "sara@example.com", "code": code2, "new_password": "newpass99"}
     ).status_code == 200
 
 
 def test_unknown_email_reveals_nothing(client, monkeypatch):
     sent = []
-    monkeypatch.setattr("app.routers.auth.send_password_reset", lambda *a: sent.append(a))
+    monkeypatch.setattr("app.routers.auth.send_password_reset_code", lambda *a: sent.append(a))
     r = client.post("/api/auth/forgot-password", json={"email": "nobody@example.com"})
-    assert r.status_code == 200 and "dev_reset_token" not in r.json() and not sent
+    assert r.status_code == 200 and "dev_reset_code" not in r.json() and not sent
+    r = client.post("/api/auth/reset-password", json={"email": "nobody@example.com", "code": "123456", "new_password": "newpass99"})
+    assert r.status_code == 400
 
 
 def test_reset_requires_strong_password(client):
     register(client)
-    token = client.post("/api/auth/forgot-password", json={"email": "sara@example.com"}).json()[
-        "dev_reset_token"
-    ]
-    r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "aaaaaaaa"})
+    code = client.post("/api/auth/forgot-password", json={"email": "sara@example.com"}).json()["dev_reset_code"]
+    r = client.post("/api/auth/reset-password", json={"email": "sara@example.com", "code": code, "new_password": "aaaaaaaa"})
     assert r.status_code == 422
+
+
+def test_reset_code_locks_after_wrong_guesses(client):
+    register(client)
+    code = client.post("/api/auth/forgot-password", json={"email": "sara@example.com"}).json()["dev_reset_code"]
+    wrong = "000000" if code != "000000" else "111111"
+    body = {"email": "sara@example.com", "new_password": "newpass99"}
+    for _ in range(settings.verification_max_attempts):
+        assert client.post("/api/auth/reset-password", json={**body, "code": wrong}).status_code == 400
+    # Even the right code is refused now.
+    r = client.post("/api/auth/reset-password", json={**body, "code": code})
+    assert r.status_code == 400 and "Too many" in r.json()["detail"]
 
 
 def test_mailer_without_smtp_does_not_raise():

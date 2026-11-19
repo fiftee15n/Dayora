@@ -119,7 +119,8 @@ class ForgotPasswordIn(BaseModel):
 
 
 class ResetPasswordIn(BaseModel):
-    token: str = Field(min_length=10, max_length=200)
+    email: EmailStr
+    code: str = Field(pattern=r"^\d{6}$")
     new_password: StrongPassword
 
 

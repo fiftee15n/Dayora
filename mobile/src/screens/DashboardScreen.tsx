@@ -1,5 +1,7 @@
 import { useNavigation } from "@react-navigation/native";
-import { format, isToday, isTomorrow } from "date-fns";
+import { format } from "date-fns/format";
+import { isToday } from "date-fns/isToday";
+import { isTomorrow } from "date-fns/isTomorrow";
 import * as React from "react";
 import { Pressable, ScrollView, Text, View, type ViewStyle } from "react-native";
 
@@ -99,11 +101,12 @@ export function DashboardScreen() {
         {/* ------------------------------------------------ header */}
         <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
           <View style={{ flex: 1 }}>
-            <Text style={s.eyebrow}>{format(new Date(), "EEEE · d MMMM").toUpperCase()}</Text>
-            <Text style={{ marginTop: 6, fontSize: 28, lineHeight: 33, letterSpacing: -0.8 }} numberOfLines={2}>
-              <Text style={{ color: K.faint, fontWeight: "600" }}>{greeting()},{"\n"}</Text>
+            {/* One line: shrinks to fit rather than wrapping onto a second line. */}
+            <Text style={{ fontSize: 28, lineHeight: 33, letterSpacing: -0.8 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+              <Text style={{ color: K.faint, fontWeight: "600" }}>{greeting()}, </Text>
               <Text style={{ color: K.ink, fontWeight: "800" }}>{name}</Text>
             </Text>
+            <Text style={[s.eyebrow, { marginTop: 4 }]}>{format(new Date(), "EEEE · d MMMM").toUpperCase()}</Text>
           </View>
           <RoundButton onPress={() => nav.navigate("Calendar")} label="Reminders">
             <Glyph name="bell" size={21} />

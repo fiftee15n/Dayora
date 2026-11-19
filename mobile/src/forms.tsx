@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { format } from "date-fns/format";
 import * as React from "react";
 import { Pressable, View } from "react-native";
 

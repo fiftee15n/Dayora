@@ -1,4 +1,9 @@
-import { format, formatDistanceToNowStrict, isToday, isTomorrow, isYesterday, parseISO } from "date-fns";
+import { format } from "date-fns/format";
+import { formatDistanceToNowStrict } from "date-fns/formatDistanceToNowStrict";
+import { isToday } from "date-fns/isToday";
+import { isTomorrow } from "date-fns/isTomorrow";
+import { isYesterday } from "date-fns/isYesterday";
+import { parseISO } from "date-fns/parseISO";
 
 const SYMBOLS: Record<string, string> = {
   BDT: "৳",

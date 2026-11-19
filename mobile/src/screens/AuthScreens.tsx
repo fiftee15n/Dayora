@@ -27,7 +27,7 @@ export type AuthStack = {
   Register: undefined;
   Verify: { email: string; resendIn?: number; devCode?: string };
   Forgot: undefined;
-  Reset: { token?: string } | undefined;
+  Reset: { email: string; devCode?: string };
 };
 
 /** Black-and-white palette used only by the sign-in screens. */
@@ -711,7 +711,6 @@ export function VerifyScreen({ navigation, route }: NativeStackScreenProps<AuthS
 
 export function ForgotScreen({ navigation }: NativeStackScreenProps<AuthStack, "Forgot">) {
   const [email, setEmail] = React.useState("");
-  const [sent, setSent] = React.useState<{ message: string; dev_reset_token?: string } | null>(null);
   const [error, setError] = React.useState("");
   const [loading, setLoading] = React.useState(false);
 
@@ -720,7 +719,11 @@ export function ForgotScreen({ navigation }: NativeStackScreenProps<AuthStack, "
     setError("");
     setLoading(true);
     try {
-      setSent(await api("/api/auth/forgot-password", { method: "POST", json: { email: email.trim() } }));
+      const res = await api<{ message: string; dev_reset_code?: string }>("/api/auth/forgot-password", {
+        method: "POST",
+        json: { email: email.trim() },
+      });
+      navigation.navigate("Reset", { email: email.trim(), devCode: res.dev_reset_code });
     } catch (err) {
       setError(errorMessage(err));
     } finally {
@@ -729,84 +732,81 @@ export function ForgotScreen({ navigation }: NativeStackScreenProps<AuthStack, "
   }
 
   return (
-    <AuthLayout
-      title="Reset password"
-      subtitle="Enter your email and we'll send you a link to choose a new password."
-      onBack={() => navigation.goBack()}
-    >
-      {sent ? (
-        <>
-          <View style={{ flexDirection: "row", gap: 12, padding: 16, borderRadius: 14, backgroundColor: M.field }}>
-            <Icon name="mail" size={20} color={M.ink} />
-            <Text style={{ flex: 1, color: M.ink, fontSize: 14, lineHeight: 20 }}>{sent.message}</Text>
-          </View>
-          <PrimaryButton title="I have a reset code" onPress={() => navigation.navigate("Reset", { token: sent.dev_reset_token })} />
-          {sent.dev_reset_token ? (
-            <Text style={{ color: M.sub, fontSize: 12 }}>Development server: the reset code will be filled in for you.</Text>
-          ) : null}
-        </>
-      ) : (
-        <>
-          <AuthInput
-            label="Email"
-            icon="mail"
-            value={email}
-            onChangeText={setEmail}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            placeholder="you@example.com"
-            error={error}
-            onSubmitEditing={submit}
-          />
-          <PrimaryButton title="Send reset link" onPress={submit} loading={loading} />
-        </>
-      )}
+    <AuthLayout title="Reset password" subtitle="Enter your email and we'll send you a 6-digit code." onBack={() => navigation.goBack()}>
+      <AuthInput
+        label="Email Address"
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        keyboardType="email-address"
+        autoComplete="email"
+        placeholder="Enter email"
+        error={error}
+        onSubmitEditing={submit}
+      />
+      <PrimaryButton title="Send code" onPress={submit} loading={loading} />
     </AuthLayout>
   );
 }
 
 export function ResetScreen({ navigation, route }: NativeStackScreenProps<AuthStack, "Reset">) {
-  const [token, setToken] = React.useState(route.params?.token ?? "");
+  const { email, devCode } = route.params;
+  const [code, setCode] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [loading, setLoading] = React.useState(false);
+  const [resending, setResending] = React.useState(false);
+  const [dev, setDev] = React.useState(devCode);
 
   async function submit() {
     const e: Record<string, string> = {};
-    if (token.trim().length < 10) e.token = "Paste the code from the reset link";
+    if (code.length !== CODE_LENGTH) e.code = "Enter the 6-digit code";
     if (password.length < 8) e.new_password = "At least 8 characters";
     else if (!/[a-z]/i.test(password) || !/\d/.test(password)) e.new_password = "Use letters and numbers";
     setErrors(e);
     if (Object.keys(e).length) return;
     setLoading(true);
     try {
-      await api("/api/auth/reset-password", { method: "POST", json: { token: token.trim(), new_password: password } });
+      await api("/api/auth/reset-password", { method: "POST", json: { email, code, new_password: password } });
       toast("Password updated. Please sign in.");
       navigation.navigate("Login");
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fields).length) setErrors(err.fields);
-      else setErrors({ form: errorMessage(err) });
+      else setErrors({ code: errorMessage(err) });
+      setCode("");
     } finally {
       setLoading(false);
     }
   }
 
+  async function resend() {
+    setResending(true);
+    try {
+      const res = await api<{ dev_reset_code?: string }>("/api/auth/forgot-password", { method: "POST", json: { email } });
+      setDev(res.dev_reset_code);
+      setCode("");
+      setErrors({});
+      toast("A new code is on its way.");
+    } catch (err) {
+      toast(errorMessage(err));
+    } finally {
+      setResending(false);
+    }
+  }
+
   return (
-    <AuthLayout title="New password" subtitle="Enter the code from your email and choose a new password." onBack={() => navigation.goBack()}>
+    <AuthLayout title="New Password" subtitle={`Enter the 6-digit code we sent to\n${email}`} onBack={() => navigation.goBack()}>
+      <CodeBoxes value={code} onChange={(v) => setCode(v)} error={!!errors.code} autoFocus />
+      {errors.code ? <Text style={{ color: M.error, fontSize: 13, textAlign: "center" }}>{errors.code}</Text> : null}
+      {dev ? (
+        <Pressable onPress={() => setCode(dev)} hitSlop={6}>
+          <Text style={{ color: M.sub, fontSize: 12, textAlign: "center" }}>
+            Development server (no email set up): code <Text style={{ color: M.ink, fontWeight: "800" }}>{dev}</Text> · tap to fill
+          </Text>
+        </Pressable>
+      ) : null}
       <AuthInput
-        label="Reset code"
-        icon="key"
-        value={token}
-        onChangeText={setToken}
-        autoCapitalize="none"
-        autoCorrect={false}
-        error={errors.token}
-        placeholder="From the link in your email"
-      />
-      <AuthInput
-        label="New password"
-        icon="lock"
+        label="New Password"
         password
         value={password}
         onChangeText={setPassword}
@@ -815,8 +815,13 @@ export function ResetScreen({ navigation, route }: NativeStackScreenProps<AuthSt
         autoComplete="new-password"
         onSubmitEditing={submit}
       />
-      <FormError message={errors.form} />
       <PrimaryButton title="Update password" onPress={submit} loading={loading} />
+      <View style={{ flexDirection: "row", justifyContent: "center", gap: 4 }}>
+        <Text style={{ color: M.sub, fontSize: 15 }}>Didn't get the code?</Text>
+        <Pressable onPress={resend} hitSlop={8} disabled={resending}>
+          <Text style={{ color: M.ink, fontSize: 15, fontWeight: "800" }}>{resending ? "Sending…" : "Resend"}</Text>
+        </Pressable>
+      </View>
     </AuthLayout>
   );
 }

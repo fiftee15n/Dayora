@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import { format } from "date-fns";
+import { format } from "date-fns/format";
 import * as React from "react";
 import { Pressable, Text, View } from "react-native";
 

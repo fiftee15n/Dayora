@@ -16,14 +16,15 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 Interactive docs: http://localhost:8000/docs
 
 ## Auth
-* Web: `POST /api/auth/login` sets an **HTTP-only cookie** (`dayora_token`).
-* Mobile: the same response includes `access_token`; send it as `Authorization: Bearer <token>`.
+* `POST /api/auth/login` returns `access_token`; the app sends it as `Authorization: Bearer <token>`.
+  (An HTTP-only cookie, `dayora_token`, is also set for browser clients.)
 * Clients send `X-TZ-Offset` (minutes east of UTC) so "today" matches the user's local day.
 * Passwords hashed with bcrypt; login/register/reset endpoints are rate-limited.
 * `POST /api/auth/logout-all` revokes every token for the user. Changing the password does the
   same for every *other* session and returns a fresh token for the current one.
-* Password reset emails are sent over SMTP (`SMTP_*` in `.env`). Without `SMTP_HOST` the email is
-  logged, and in development the token is also returned as `dev_reset_token`.
+* Password reset: `POST /api/auth/forgot-password` `{email}` emails a 6-digit code (30 minutes,
+  5 wrong tries), then `POST /api/auth/reset-password` `{email, code, new_password}`. Without
+  `SMTP_HOST` the email is logged, and in development the code is returned as `dev_reset_code`.
 * Outside development the API refuses to start unless `JWT_SECRET` is 32+ characters.
   Set `COOKIE_SECURE=true` behind HTTPS (this also enables HSTS).
 
@@ -36,7 +37,7 @@ Interactive docs: http://localhost:8000/docs
 Codes expire after `VERIFICATION_CODE_EXPIRE_MINUTES` (10), allow `VERIFICATION_MAX_ATTEMPTS` (5)
 wrong guesses, and `POST /api/auth/signup/resend` `{email}` sends a new one after
 `VERIFICATION_RESEND_SECONDS` (60). Codes are stored as keyed hashes. The one-step
-`POST /api/auth/register` (no email check) is still used by the web app.
+`POST /api/auth/register` (one step, no email check) remains for scripts and tests.
 
 **Sending from Gmail:** turn on 2-Step Verification for the Gmail account, create an
 [App password](https://myaccount.google.com/apppasswords), then in `.env`:

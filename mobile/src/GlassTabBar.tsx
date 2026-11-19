@@ -176,9 +176,9 @@ const styles = StyleSheet.create({
     borderColor: "rgba(10,10,10,0.07)",
   },
   rim: { position: "absolute", top: 0, left: R / 2, right: R / 2, height: 1, backgroundColor: "rgba(255,255,255,0.95)" },
-  row: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 6 },
+  row: { flex: 1, flexDirection: "row", alignItems: "center", paddingHorizontal: 4 },
   item: { flex: 1, alignItems: "center", justifyContent: "center", gap: 2 },
-  iconWrap: { width: 46, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  iconWrap: { width: 42, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
   label: { fontSize: 10.5, fontWeight: "600", letterSpacing: 0.1 },
   labelActive: { fontWeight: "800" },
 });

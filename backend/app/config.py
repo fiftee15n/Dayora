@@ -14,15 +14,14 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7
 
-    cors_origins: str = "http://localhost:3000"
+    cors_origins: str = ""  # only needed for browser clients
     cookie_name: str = "dayora_token"
     cookie_secure: bool = False
 
     upload_dir: str = "uploads"
     max_avatar_bytes: int = 2 * 1024 * 1024
 
-    # Public URL of the web app, used to build links in emails (e.g. password reset).
-    frontend_url: str = "http://localhost:3000"
+    # Password reset codes (6 digits, emailed).
     reset_token_expire_minutes: int = 30
 
     # Outgoing email (optional). When SMTP_HOST is empty, emails are logged instead of sent.

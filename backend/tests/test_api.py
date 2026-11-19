@@ -49,14 +49,14 @@ def test_logout_clears_cookie(client):
 def test_password_reset_flow(client):
     register(client)
     r = client.post("/api/auth/forgot-password", json={"email": "sara@example.com"})
-    token = r.json()["dev_reset_token"]
-    r = client.post("/api/auth/reset-password", json={"token": token, "new_password": "newpass99"})
+    code = r.json()["dev_reset_code"]
+    assert len(code) == 6 and code.isdigit()
+    body = {"email": "sara@example.com", "code": code}
+    r = client.post("/api/auth/reset-password", json={**body, "new_password": "newpass99"})
     assert r.status_code == 200
-    # old sessions invalidated, token single-use, new password works
+    # old sessions invalidated, code single-use, new password works
     assert client.get("/api/auth/me").status_code == 401
-    assert client.post(
-        "/api/auth/reset-password", json={"token": token, "new_password": "another99"}
-    ).status_code == 400
+    assert client.post("/api/auth/reset-password", json={**body, "new_password": "another99"}).status_code == 400
     assert client.post(
         "/api/auth/login", json={"email": "sara@example.com", "password": "newpass99"}
     ).status_code == 200

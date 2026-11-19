@@ -4,7 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import * as SystemUI from "expo-system-ui";
 import * as React from "react";
-import { ActivityIndicator, AppState, View } from "react-native";
+import { ActivityIndicator, AppState, Image, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthProvider, useAuth } from "./src/auth";
@@ -24,6 +24,7 @@ import { FabScrollProvider } from "./src/fabScroll";
 import { BlurTargetLayout, BlurTargetsProvider, GlassTabBar } from "./src/GlassTabBar";
 import { type GlyphName } from "./src/icons";
 import { LoanDetailScreen, type LoanParams, LoansScreen, type LoansParams } from "./src/screens/LoansScreens";
+import { NamazScreen } from "./src/screens/NamazScreen";
 
 type RootStack = AuthStack & {
   Tabs: undefined;
@@ -43,6 +44,7 @@ const TAB_ICONS: Record<string, GlyphName> = {
   Tasks: "check-circle",
   Money: "wallet",
   Habits: "flame",
+  Namaz: "mosque",
   Calendar: "calendar",
 };
 
@@ -59,6 +61,7 @@ function Tabs() {
         <Tab.Screen name="Tasks" component={TasksScreen} />
         <Tab.Screen name="Money" component={MoneyScreen} />
         <Tab.Screen name="Habits" component={HabitsScreen} />
+        <Tab.Screen name="Namaz" component={NamazScreen} />
         <Tab.Screen name="Calendar" component={CalendarScreen} />
       </Tab.Navigator>
     </BlurTargetsProvider>
@@ -84,8 +87,10 @@ function Root() {
 
   if (!ready)
     return (
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.background }}>
-        <ActivityIndicator color={c.primary} size="large" />
+      // Same look as the launch screen: the wordmark, tinted for light/dark, with a small spinner.
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: c.background, gap: 28 }}>
+        <Image source={require("./assets/wordmark.png")} style={{ width: 180, height: 52, tintColor: c.foreground }} resizeMode="contain" accessibilityLabel="Dayora" />
+        <ActivityIndicator color={c.mutedForeground} size="small" />
       </View>
     );
 

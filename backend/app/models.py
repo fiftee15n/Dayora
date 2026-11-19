@@ -66,6 +66,7 @@ class PasswordResetToken(Base):
     token_hash: Mapped[str] = mapped_column(String(128), unique=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     used: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class TaskCategory(Base):
@@ -218,6 +219,20 @@ class Habit(TimestampMixin, Base):
     logs: Mapped[list[HabitLog]] = relationship(
         back_populates="habit", cascade="all, delete-orphan", order_by="HabitLog.date"
     )
+
+
+class PrayerLog(Base):
+    """One of the five daily prayers marked for a day (Namaz tracker)."""
+
+    __tablename__ = "prayer_logs"
+    __table_args__ = (UniqueConstraint("user_id", "date", "prayer"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    date: Mapped[date] = mapped_column(Date, index=True)
+    prayer: Mapped[str] = mapped_column(String(10))  # fajr | dhuhr | asr | maghrib | isha
+    status: Mapped[str] = mapped_column(String(10), default="prayed")  # prayed | qaza
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
 class HabitLog(Base):

@@ -1,16 +1,14 @@
-import {
-  addDays,
-  addMonths,
-  eachDayOfInterval,
-  endOfMonth,
-  endOfWeek,
-  format,
-  isAfter,
-  isSameMonth,
-  isToday,
-  startOfMonth,
-  startOfWeek,
-} from "date-fns";
+import { addDays } from "date-fns/addDays";
+import { addMonths } from "date-fns/addMonths";
+import { eachDayOfInterval } from "date-fns/eachDayOfInterval";
+import { endOfMonth } from "date-fns/endOfMonth";
+import { endOfWeek } from "date-fns/endOfWeek";
+import { format } from "date-fns/format";
+import { isAfter } from "date-fns/isAfter";
+import { isSameMonth } from "date-fns/isSameMonth";
+import { isToday } from "date-fns/isToday";
+import { startOfMonth } from "date-fns/startOfMonth";
+import { startOfWeek } from "date-fns/startOfWeek";
 import * as React from "react";
 import { Pressable, Text, View } from "react-native";
 
