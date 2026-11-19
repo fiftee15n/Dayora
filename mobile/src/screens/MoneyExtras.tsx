@@ -124,10 +124,7 @@ export function QuickIncomeCard() {
     <View style={{ backgroundColor: c.card, borderRadius: 24, borderWidth: 1, borderColor: c.border, overflow: "hidden" }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 16, paddingBottom: 12 }}>
         <View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Glyph name="lightning" size={20} />
-            <Text style={{ color: c.foreground, fontSize: 16, fontWeight: "800" }}>Quick income</Text>
-          </View>
+          <Text style={{ color: c.foreground, fontSize: 16, fontWeight: "800" }}>Quick income</Text>
           {sources?.length ? (
             <Text style={{ color: c.mutedForeground, fontSize: 12, marginTop: 3 }}>
               {done} of {sources.length} added for {monthName}
