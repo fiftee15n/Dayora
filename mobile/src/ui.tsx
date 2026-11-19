@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   Image,
@@ -26,8 +27,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { mediaUrl } from "./api";
+import { useFabScroll } from "./fabScroll";
 import { useFloatingTabBarSpace } from "./GlassTabBar";
-import { BRAND, radius, useColors } from "./theme";
+import { radius, useColors } from "./theme";
 import { alpha, initials } from "./utils";
 
 export type IconName = React.ComponentProps<typeof Feather>["name"];
@@ -109,6 +111,7 @@ export function Screen({
   const c = useColors();
   const insets = useSafeAreaInsets();
   const barSpace = useFloatingTabBarSpace(); // room for the floating tab bar on tab screens
+  const fabScroll = useFabScroll();
   const header = title ? (
     <View style={[styles.header, { paddingTop: insets.top + 12 }]}>
       {back && (
@@ -131,8 +134,11 @@ export function Screen({
       {header}
       {scroll ? (
         <ScrollView
-          contentContainerStyle={[pad, { paddingBottom: barSpace ? barSpace + 32 : 110, gap: 14 }]}
+          // Enough room at the end for the last item to scroll clear of the "+" button.
+          contentContainerStyle={[pad, { paddingBottom: barSpace + FAB_CLEARANCE, gap: 14 }]}
           keyboardShouldPersistTaps="handled"
+          onScroll={fabScroll?.onScroll}
+          scrollEventThrottle={16}
           refreshControl={
             onRefresh ? (
               <RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor={c.primary} colors={[c.primary]} />
@@ -224,7 +230,7 @@ export function Button({
       style={({ pressed }) => [{ borderRadius: 12, overflow: "hidden", opacity: disabled ? 0.5 : pressed ? 0.85 : 1 }, style]}
     >
       {variant === "primary" ? (
-        <LinearGradient colors={BRAND} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={inner}>
+        <LinearGradient colors={[c.primary, c.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={inner}>
           {content}
         </LinearGradient>
       ) : (
@@ -248,14 +254,28 @@ export function IconButton({ name, onPress, color, bg, size = 20, label }: { nam
   );
 }
 
+/** Space under the last item: the "+" button (58) + its offset (22) + breathing room. */
+const FAB_CLEARANCE = 22 + 58 + 24;
+
 export function Fab({ onPress, icon = "plus" }: { onPress: () => void; icon?: IconName }) {
   const barSpace = useFloatingTabBarSpace();
+  const c = useColors();
+  const fabScroll = useFabScroll();
+  // Slides down out of the way while scrolling down a list, back up when scrolling up.
+  const hide = fabScroll
+    ? {
+        opacity: fabScroll.shown,
+        transform: [{ translateY: fabScroll.shown.interpolate({ inputRange: [0, 1], outputRange: [22 + barSpace + 70, 0] }) }],
+      }
+    : null;
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.fab, { bottom: 22 + barSpace, opacity: pressed ? 0.85 : 1 }]} accessibilityLabel="Add">
-      <LinearGradient colors={BRAND} style={styles.fabInner}>
-        <Icon name={icon} size={26} color="#fff" />
-      </LinearGradient>
-    </Pressable>
+    <Animated.View style={[styles.fab, { bottom: 22 + barSpace }, hide]} pointerEvents="box-none">
+      <Pressable onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })} accessibilityLabel="Add">
+        <LinearGradient colors={[c.primary, c.accent]} style={styles.fabInner}>
+          <Icon name={icon} size={26} color={c.primaryForeground} />
+        </LinearGradient>
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -486,14 +506,15 @@ export function Progress({ value, color, height = 8 }: { value: number; color?: 
 }
 
 export function Avatar({ name, url, size = 44 }: { name: string; url: string | null | undefined; size?: number }) {
+  const c = useColors();
   const src = mediaUrl(url);
   const [failed, setFailed] = React.useState(false);
   React.useEffect(() => setFailed(false), [src]);
   if (src && !failed)
     return <Image source={{ uri: src }} onError={() => setFailed(true)} style={{ width: size, height: size, borderRadius: size / 2 }} />;
   return (
-    <LinearGradient colors={BRAND} style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ color: "#fff", fontWeight: "800", fontSize: size * 0.36 }}>{initials(name || "?")}</Text>
+    <LinearGradient colors={[c.primary, c.accent]} style={{ width: size, height: size, borderRadius: size / 2, alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ color: c.primaryForeground, fontWeight: "800", fontSize: size * 0.36 }}>{initials(name || "?")}</Text>
     </LinearGradient>
   );
 }

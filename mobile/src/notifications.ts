@@ -1,3 +1,4 @@
+import * as SecureStore from "expo-secure-store";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 
@@ -26,7 +27,7 @@ export async function ensureNotificationPermission() {
     await Notifications.setNotificationChannelAsync(CHANNEL, {
       name: "Reminders",
       importance: Notifications.AndroidImportance.HIGH,
-      lightColor: "#6366F1",
+      lightColor: "#0A0A0A",
     });
   }
   const current = await Notifications.getPermissionsAsync();
@@ -40,6 +41,36 @@ export async function cancelAllReminderNotifications() {
   await Notifications.cancelAllScheduledNotificationsAsync();
 }
 
+// ---------------------------------------------------------------- on/off preference (Settings)
+
+const ALERTS_KEY = "dayora_reminder_alerts";
+let alertsEnabled: boolean | null = null;
+
+export async function getReminderAlertsEnabled() {
+  if (alertsEnabled === null) alertsEnabled = (await SecureStore.getItemAsync(ALERTS_KEY).catch(() => null)) !== "off";
+  return alertsEnabled;
+}
+
+/** System permission for notifications, re-read from the OS (it can change in Android settings). */
+export async function getNotificationPermission() {
+  const p = await Notifications.getPermissionsAsync();
+  permission = p.granted;
+  return { granted: p.granted, canAskAgain: p.canAskAgain };
+}
+
+/** Turn reminder alerts on (asks for permission if needed) or off. Returns the resulting state. */
+export async function setReminderAlertsEnabled(on: boolean) {
+  if (on) {
+    permission = null; // ask the OS again
+    if (!(await ensureNotificationPermission())) return false;
+  }
+  alertsEnabled = on;
+  await SecureStore.setItemAsync(ALERTS_KEY, on ? "on" : "off").catch(() => {});
+  if (on) await syncReminderNotifications();
+  else await cancelAllReminderNotifications().catch(() => {});
+  return on;
+}
+
 let syncing = false;
 
 /** Re-schedule local notifications for every reminder due in the next two weeks. */
@@ -47,6 +78,7 @@ export async function syncReminderNotifications() {
   if (syncing) return;
   syncing = true;
   try {
+    if (!(await getReminderAlertsEnabled())) return;
     if (!(await ensureNotificationPermission())) return;
     const now = new Date();
     const end = new Date(now.getTime() + DAYS_AHEAD * 86400_000);
