@@ -212,6 +212,110 @@ class TransactionUpdate(BaseModel):
     category_id: int | None = None
 
 
+LoanDirection = Literal["borrowed", "lent"]
+
+
+class LoanIn(BaseModel):
+    person: str = Field(min_length=1, max_length=120)
+    direction: LoanDirection
+    amount: float = Field(gt=0, le=1_000_000_000)
+    date: Date
+    note: str | None = Field(default=None, max_length=500)
+    due_date: Date | None = None
+    # Also record the money in Money (income when borrowed, expense when lent).
+    record_in_money: bool = True
+    payment_method: str = Field(default="cash", max_length=30)
+
+
+class LoanUpdate(BaseModel):
+    person: str | None = Field(default=None, min_length=1, max_length=120)
+    note: str | None = Field(default=None, max_length=500)
+    due_date: Date | None = None
+
+
+class LoanEntryIn(BaseModel):
+    kind: Literal["payment", "principal"] = "payment"
+    amount: float = Field(gt=0, le=1_000_000_000)
+    date: Date
+    note: str | None = Field(default=None, max_length=255)
+    record_in_money: bool = True
+    payment_method: str = Field(default="cash", max_length=30)
+
+
+class LoanEntryOut(ORM):
+    id: int
+    kind: str
+    amount: float
+    date: Date
+    note: str | None
+    transaction_id: int | None
+
+
+class LoanOut(BaseModel):
+    id: int
+    person: str
+    direction: str
+    note: str | None
+    due_date: Date | None
+    created_at: UTCDateTime
+    principal: float  # total borrowed / lent
+    paid: float  # total paid back
+    remaining: float
+    settled: bool
+    last_date: Date | None  # most recent entry
+    entries_count: int
+
+
+class LoanDetailOut(LoanOut):
+    entries: list[LoanEntryOut]
+
+
+class LoanTotals(BaseModel):
+    i_owe: float  # remaining on money I borrowed
+    owed_to_me: float  # remaining on money I lent
+    open_borrowed: int
+    open_lent: int
+
+
+class LoanListOut(BaseModel):
+    items: list[LoanOut]
+    totals: LoanTotals
+
+
+class IncomeSourceIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    amount: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    category_id: int | None = None
+    payment_method: str = Field(default="bank", max_length=30)
+
+
+class IncomeSourceUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    amount: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    category_id: int | None = None
+    payment_method: str | None = Field(default=None, max_length=30)
+
+
+class IncomeSourceOut(ORM):
+    id: int
+    name: str
+    amount: float | None
+    category_id: int | None
+    category: ExpenseCategoryOut | None
+    payment_method: str
+    # This month's entry from this source, if it has been added (the tick in Quick income).
+    this_month_transaction_id: int | None = None
+    this_month_amount: float | None = None
+    this_month_date: Date | None = None
+
+
+class IncomeSourceAddIn(BaseModel):
+    """Body for one-tap income: everything optional, the source's defaults fill the gaps."""
+
+    amount: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    date: Date | None = None
+
+
 class TransactionOut(ORM):
     id: int
     type: str

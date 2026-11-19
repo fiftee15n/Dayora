@@ -201,3 +201,51 @@ export interface Report {
   series: DaySeries[];
   top_categories: { name: string; color: string; total: number }[];
 }
+
+export type LoanDirection = "borrowed" | "lent";
+
+export interface LoanEntry {
+  id: number;
+  kind: "principal" | "payment";
+  amount: number;
+  date: string;
+  note: string | null;
+  transaction_id: number | null;
+}
+
+export interface Loan {
+  id: number;
+  person: string;
+  direction: LoanDirection;
+  note: string | null;
+  due_date: string | null;
+  created_at: string;
+  principal: number;
+  paid: number;
+  remaining: number;
+  settled: boolean;
+  last_date: string | null;
+  entries_count: number;
+}
+
+export interface LoanDetail extends Loan {
+  entries: LoanEntry[];
+}
+
+export interface LoanList {
+  items: Loan[];
+  totals: { i_owe: number; owed_to_me: number; open_borrowed: number; open_lent: number };
+}
+
+export interface IncomeSource {
+  id: number;
+  name: string;
+  amount: number | null;
+  category_id: number | null;
+  category: ExpenseCategory | null;
+  payment_method: string;
+  /** This month's income from this source, if already added (the tick). */
+  this_month_transaction_id: number | null;
+  this_month_amount: number | null;
+  this_month_date: string | null;
+}

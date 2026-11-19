@@ -32,13 +32,20 @@ class Base(DeclarativeBase):
 def upgrade_schema() -> None:
     """Add columns introduced after a database was first created (create_all only adds tables)."""
     insp = inspect(engine)
-    if "users" not in insp.get_table_names():
+    tables = insp.get_table_names()
+    if "users" not in tables:
         return
     columns = {c["name"] for c in insp.get_columns("users")}
+    tx_columns = {c["name"] for c in insp.get_columns("transactions")} if "transactions" in tables else set()
     with engine.begin() as conn:
         if "google_sub" not in columns:
             conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(64)"))
             conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_google_sub ON users (google_sub)"))
+        if tx_columns and "income_source_id" not in tx_columns:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN income_source_id INTEGER"))
+            conn.execute(
+                text("CREATE INDEX IF NOT EXISTS ix_transactions_income_source_id ON transactions (income_source_id)")
+            )
 
 
 def get_db() -> Generator[Session, None, None]:

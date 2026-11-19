@@ -19,9 +19,11 @@ import { type NoteEditorParams, NoteEditorScreen, NotesScreen } from "./src/scre
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { TasksScreen } from "./src/screens/TasksScreen";
 import { useColors, useIsDark } from "./src/theme";
+import { ConfirmHost } from "./src/ConfirmDialog";
 import { FabScrollProvider } from "./src/fabScroll";
 import { BlurTargetLayout, BlurTargetsProvider, GlassTabBar } from "./src/GlassTabBar";
 import { type GlyphName } from "./src/icons";
+import { LoanDetailScreen, type LoanParams, LoansScreen, type LoansParams } from "./src/screens/LoansScreens";
 
 type RootStack = AuthStack & {
   Tabs: undefined;
@@ -29,6 +31,8 @@ type RootStack = AuthStack & {
   NoteEditor: NoteEditorParams;
   History: undefined;
   Settings: undefined;
+  Loans: LoansParams;
+  Loan: LoanParams;
 };
 
 const Stack = createNativeStackNavigator<RootStack>();
@@ -101,6 +105,8 @@ function Root() {
             <Stack.Screen name="Notes" component={NotesScreen} />
             <Stack.Screen name="NoteEditor" component={NoteEditorScreen} />
             <Stack.Screen name="History" component={HistoryScreen} />
+            <Stack.Screen name="Loans" component={LoansScreen} />
+            <Stack.Screen name="Loan" component={LoanDetailScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
           </>
         ) : (
@@ -123,6 +129,7 @@ export default function App() {
       <AuthProvider>
         <Root />
       </AuthProvider>
+      <ConfirmHost />
     </SafeAreaProvider>
   );
 }

@@ -27,7 +27,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { mediaUrl } from "./api";
+import { requestConfirm } from "./ConfirmDialog";
 import { useFabScroll } from "./fabScroll";
+import type { GlyphName } from "./icons";
 import { useFloatingTabBarSpace } from "./GlassTabBar";
 import { radius, useColors } from "./theme";
 import { alpha, initials } from "./utils";
@@ -48,13 +50,16 @@ export function errorMessage(e: unknown, fallback = "Something went wrong") {
   return e instanceof Error && e.message ? e.message : fallback;
 }
 
-export function confirm(title: string, message: string, action = "Delete", destructive = true) {
-  return new Promise<boolean>((resolve) =>
+/** Ask before doing something. Shows the app's themed dialog (ConfirmDialog.tsx). */
+export function confirm(title: string, message: string, action = "Delete", destructive = true, icon?: GlyphName) {
+  return new Promise<boolean>((resolve) => {
+    if (requestConfirm({ title, message, action, destructive, icon, resolve })) return;
+    // Fallback if the dialog host isn't mounted.
     Alert.alert(title, message, [
       { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
       { text: action, style: destructive ? "destructive" : "default", onPress: () => resolve(true) },
-    ], { cancelable: true, onDismiss: () => resolve(false) }),
-  );
+    ], { cancelable: true, onDismiss: () => resolve(false) });
+  });
 }
 
 // ---------- Text ----------
@@ -574,6 +579,92 @@ export function ErrorBox({ error, onRetry }: { error: Error; onRetry?: () => voi
       <T variant="small">{error.message}</T>
       {onRetry ? <Button title="Try again" small variant="outline" icon="refresh-cw" onPress={onRetry} /> : null}
     </Card>
+  );
+}
+
+const MONTHS_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+/**
+ * "November 2026 ▾" — tap to open a month picker (year switcher + 12-month grid).
+ * `value` is any date in the month; onChange receives the 1st of the chosen month.
+ */
+export function MonthPicker({ value, onChange }: { value: Date; onChange: (d: Date) => void }) {
+  const c = useColors();
+  const [open, setOpen] = React.useState(false);
+  const [year, setYear] = React.useState(value.getFullYear());
+  const now = new Date();
+  const isCurrent = value.getFullYear() === now.getFullYear() && value.getMonth() === now.getMonth();
+
+  React.useEffect(() => {
+    if (open) setYear(value.getFullYear());
+  }, [open, value]);
+
+  function pick(m: number, y = year) {
+    onChange(new Date(y, m, 1));
+    setOpen(false);
+  }
+
+  return (
+    <>
+      <Pressable
+        onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Month: ${MONTHS_LONG[value.getMonth()]} ${value.getFullYear()}. Tap to change`}
+        style={({ pressed }) => ({
+          flexDirection: "row",
+          alignItems: "center",
+          alignSelf: "flex-start",
+          gap: 8,
+          height: 44,
+          paddingLeft: 16,
+          paddingRight: 12,
+          borderRadius: 22,
+          borderWidth: 1,
+          borderColor: c.border,
+          backgroundColor: pressed ? c.muted : c.card,
+        })}
+      >
+        <Icon name="calendar" size={16} color={c.foreground} />
+        <Text style={{ color: c.foreground, fontSize: 16, fontWeight: "800" }}>
+          {MONTHS_LONG[value.getMonth()]} {value.getFullYear()}
+        </Text>
+        <Icon name="chevron-down" size={18} color={c.mutedForeground} />
+      </Pressable>
+
+      <Sheet visible={open} onClose={() => setOpen(false)} title="Choose month">
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <IconButton name="chevron-left" onPress={() => setYear(year - 1)} label="Previous year" />
+          <Text style={{ color: c.foreground, fontSize: 20, fontWeight: "800", fontVariant: ["tabular-nums"] }}>{year}</Text>
+          <IconButton name="chevron-right" onPress={() => setYear(year + 1)} label="Next year" />
+        </View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", marginHorizontal: -4 }}>
+          {MONTHS_SHORT.map((m, i) => {
+            const selected = year === value.getFullYear() && i === value.getMonth();
+            const thisMonth = year === now.getFullYear() && i === now.getMonth();
+            return (
+              <View key={m} style={{ width: "33.333%", padding: 4 }}>
+                <Pressable
+                  onPress={() => pick(i)}
+                  style={({ pressed }) => ({
+                    height: 52,
+                    borderRadius: 14,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: selected ? c.foreground : pressed ? c.muted : c.card,
+                    borderWidth: selected ? 0 : thisMonth ? 1.5 : 1,
+                    borderColor: thisMonth ? c.foreground : c.border,
+                  })}
+                >
+                  <Text style={{ color: selected ? c.background : c.foreground, fontSize: 15, fontWeight: selected || thisMonth ? "800" : "600" }}>{m}</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+        {!isCurrent ? <Button title="Go to this month" variant="outline" onPress={() => pick(now.getMonth(), now.getFullYear())} /> : null}
+      </Sheet>
+    </>
   );
 }
 

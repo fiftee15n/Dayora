@@ -46,6 +46,7 @@ DEFAULT_TASK_CATEGORIES = [
     ("Work", "#8B5CF6"),
     ("Study", "#0EA5E9"),
     ("Health", "#10B981"),
+    ("Fitness", "#F97316"),
 ]
 DEFAULT_EXPENSE_CATEGORIES = [
     ("Food & Groceries", "#F59E0B", "utensils"),
