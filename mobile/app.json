@@ -7,11 +7,6 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#6366F1"
-    },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "app.dayora.mobile"
@@ -19,7 +14,7 @@
     "android": {
       "package": "app.dayora.mobile",
       "adaptiveIcon": {
-        "backgroundColor": "#6366F1",
+        "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -29,9 +24,6 @@
         "SCHEDULE_EXACT_ALARM"
       ],
       "predictiveBackGestureEnabled": false
-    },
-    "web": {
-      "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-secure-store",
@@ -60,7 +52,20 @@
           }
         }
       ],
-      "./plugins/withEmbeddedDebugBundle"
+      "./plugins/withEmbeddedDebugBundle",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 240,
+          "resizeMode": "contain",
+          "backgroundColor": "#FFFFFF",
+          "dark": {
+            "image": "./assets/splash-icon-dark.png",
+            "backgroundColor": "#0A0A0A"
+          }
+        }
+      ]
     ],
     "extra": {
       "defaultApiUrl": "http://192.168.1.18:8000",

@@ -39,6 +39,9 @@ const UsersIcon: Icon = require("phosphor-react-native/src/icons/Users").UsersIc
 const LightningIcon: Icon = require("phosphor-react-native/src/icons/Lightning").LightningIcon;
 const ArrowCounterClockwiseIcon: Icon = require("phosphor-react-native/src/icons/ArrowCounterClockwise").ArrowCounterClockwiseIcon;
 const QuestionIcon: Icon = require("phosphor-react-native/src/icons/Question").QuestionIcon;
+const MosqueIcon: Icon = require("phosphor-react-native/src/icons/Mosque").MosqueIcon;
+const MapPinIcon: Icon = require("phosphor-react-native/src/icons/MapPin").MapPinIcon;
+const ClockCountdownIcon: Icon = require("phosphor-react-native/src/icons/ClockCountdown").ClockCountdownIcon;
 const CheckIcon: Icon = require("phosphor-react-native/src/icons/Check").CheckIcon;
 const CheckCircleIcon: Icon = require("phosphor-react-native/src/icons/CheckCircle").CheckCircleIcon;
 const CoinsIcon: Icon = require("phosphor-react-native/src/icons/Coins").CoinsIcon;
@@ -99,6 +102,9 @@ const ICONS = {
   lightning: LightningIcon,
   undo: ArrowCounterClockwiseIcon,
   question: QuestionIcon,
+  mosque: MosqueIcon,
+  "map-pin": MapPinIcon,
+  countdown: ClockCountdownIcon,
   check: CheckIcon,
   "check-circle": CheckCircleIcon,
   coins: CoinsIcon,

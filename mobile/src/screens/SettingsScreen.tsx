@@ -1,5 +1,5 @@
 import { useNavigation } from "@react-navigation/native";
-import { format } from "date-fns";
+import { format } from "date-fns/format";
 import * as ImagePicker from "expo-image-picker";
 import * as React from "react";
 import { AppState, Linking, Pressable, ScrollView, Share, Switch, Text, View } from "react-native";

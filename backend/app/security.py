@@ -38,16 +38,6 @@ def decode_access_token(token: str) -> dict:
     return jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
 
 
-def new_reset_token() -> tuple[str, str]:
-    """Returns (raw_token, sha256_hash). Only the hash is stored."""
-    raw = secrets.token_urlsafe(32)
-    return raw, hash_reset_token(raw)
-
-
-def hash_reset_token(raw: str) -> str:
-    return hashlib.sha256(raw.encode()).hexdigest()
-
-
 def new_verification_code() -> str:
     return f"{secrets.randbelow(1_000_000):06d}"
 

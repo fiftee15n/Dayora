@@ -16,6 +16,7 @@ from ..models import (
     IncomeSource,
     Loan,
     Note,
+    PrayerLog,
     Reminder,
     Task,
     TaskCategory,
@@ -170,6 +171,10 @@ def export_data(user: CurrentUser, db: DB):
             for l in db.scalars(select(Loan).where(Loan.user_id == user.id).order_by(Loan.id))
         ],
         "income_sources": rows(IncomeSource, IncomeSourceOut),
+        "prayers": [
+            {"date": p.date.isoformat(), "prayer": p.prayer, "status": p.status}
+            for p in db.scalars(select(PrayerLog).where(PrayerLog.user_id == user.id).order_by(PrayerLog.date))
+        ],
         "activity": rows(ActivityLog, ActivityOut, ActivityLog.created_at),
     }
     filename = f"dayora-export-{Date.today().isoformat()}.json"

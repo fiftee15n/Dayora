@@ -1,4 +1,7 @@
-import { addMonths, endOfMonth, format, startOfMonth } from "date-fns";
+import { addMonths } from "date-fns/addMonths";
+import { endOfMonth } from "date-fns/endOfMonth";
+import { format } from "date-fns/format";
+import { startOfMonth } from "date-fns/startOfMonth";
 import * as React from "react";
 import { Pressable, View } from "react-native";
 

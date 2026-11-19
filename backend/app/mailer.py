@@ -42,26 +42,22 @@ def send_email(to: str, subject: str, text: str, html: str | None = None) -> boo
         return False
 
 
-def send_password_reset(to: str, name: str, link: str, minutes: int) -> bool:
+def send_password_reset_code(to: str, name: str, code: str, minutes: int) -> bool:
     text = (
         f"Hi {name},\n\n"
-        f"We received a request to reset your Dayora password. Open this link to choose a new one:\n\n"
-        f"{link}\n\n"
-        f"The link expires in {minutes} minutes and can be used once. "
+        f"Your Dayora password reset code is {code}\n\n"
+        f"Enter it in the app to choose a new password. It expires in {minutes} minutes.\n"
         f"If you didn't ask for this, you can ignore this email.\n\n— Dayora"
     )
     html = f"""\
-<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;color:#0f172a">
+<div style="font-family:system-ui,sans-serif;max-width:480px;margin:auto;color:#0a0a0a">
   <h2 style="margin:0 0 12px">Reset your password</h2>
-  <p>Hi {_escape(name)},</p>
-  <p>We received a request to reset your Dayora password.</p>
-  <p style="margin:24px 0">
-    <a href="{_escape(link)}" style="background:#6366F1;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:600">Choose a new password</a>
-  </p>
-  <p style="color:#64748b;font-size:13px">The link expires in {minutes} minutes and can be used once.
+  <p>Hi {_escape(name)}, enter this code in the Dayora app to choose a new password:</p>
+  <p style="margin:24px 0;font-size:34px;font-weight:800;letter-spacing:10px;background:#f5f5f5;border-radius:12px;padding:16px;text-align:center">{code}</p>
+  <p style="color:#6b6b6b;font-size:13px">The code expires in {minutes} minutes.
   If you didn't ask for this, you can ignore this email.</p>
 </div>"""
-    return send_email(to, "Reset your Dayora password", text, html)
+    return send_email(to, f"{code} is your Dayora password reset code", text, html)
 
 
 def send_verification_code(to: str, code: str, minutes: int) -> bool:

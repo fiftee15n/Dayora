@@ -1,6 +1,6 @@
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { format } from "date-fns";
+import { format } from "date-fns/format";
 import * as React from "react";
 import { Pressable, Switch, Text, View } from "react-native";
 

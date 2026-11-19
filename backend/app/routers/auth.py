@@ -2,7 +2,6 @@ import hmac
 import re
 import secrets
 from datetime import timedelta
-from urllib.parse import quote
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response, status
 from sqlalchemy import select
@@ -10,7 +9,7 @@ from sqlalchemy import select
 from ..config import settings
 from ..deps import DB, CurrentUser, log_activity
 from ..google_auth import GoogleNotConfigured, GoogleTokenError, verify_google_id_token
-from ..mailer import send_password_reset, send_verification_code
+from ..mailer import send_password_reset_code, send_verification_code
 from ..models import ExpenseCategory, PasswordResetToken, PendingSignup, TaskCategory, User, utcnow
 from ..schemas import (
     AuthOut,
@@ -29,9 +28,7 @@ from ..security import (
     auth_rate_limit,
     create_access_token,
     hash_password,
-    hash_reset_token,
     hash_verification_code,
-    new_reset_token,
     new_verification_code,
     verify_password,
 )
@@ -290,18 +287,25 @@ def me(user: CurrentUser):
 
 @router.post("/forgot-password", dependencies=[Depends(auth_rate_limit)])
 def forgot_password(data: ForgotPasswordIn, db: DB, background: BackgroundTasks):
-    msg = {"message": "If that email is registered, a reset link has been sent."}
-    user = db.scalar(select(User).where(User.email == data.email.lower()))
+    """Email a 6-digit code for resetting the password (entered in the app)."""
+    msg = {"message": "If that email is registered, we've sent a 6-digit code to it."}
+    email = data.email.lower()
+    user = db.scalar(select(User).where(User.email == email))
     if not user:
         return msg
-    # Only the newest link should work.
+    # Only the newest code works.
     for old in db.scalars(
         select(PasswordResetToken).where(
             PasswordResetToken.user_id == user.id, PasswordResetToken.used.is_(False)
         )
     ):
         old.used = True
-    raw, hashed = new_reset_token()
+    db.flush()
+    code = new_verification_code()
+    hashed = hash_verification_code(email, f"reset:{code}")
+    while db.scalar(select(PasswordResetToken).where(PasswordResetToken.token_hash == hashed)):
+        code = new_verification_code()  # vanishingly rare repeat of an older code
+        hashed = hash_verification_code(email, f"reset:{code}")
     minutes = settings.reset_token_expire_minutes
     db.add(
         PasswordResetToken(
@@ -309,22 +313,40 @@ def forgot_password(data: ForgotPasswordIn, db: DB, background: BackgroundTasks)
         )
     )
     db.commit()
-    link = f"{settings.frontend_url.rstrip('/')}/reset-password?token={quote(raw)}"
-    background.add_task(send_password_reset, user.email, user.name, link, minutes)
-    # In development the token is also returned so the flow works without an email provider.
-    if settings.is_dev:
-        msg["dev_reset_token"] = raw
+    background.add_task(send_password_reset_code, user.email, user.name, code, minutes)
+    # Without an email provider in development, hand the code back so the flow can be tested.
+    if settings.is_dev and not settings.email_enabled:
+        msg["dev_reset_code"] = code
     return msg
 
 
 @router.post("/reset-password", dependencies=[Depends(auth_rate_limit)])
 def reset_password(data: ResetPasswordIn, db: DB):
+    email = data.email.lower()
+    invalid = HTTPException(status_code=400, detail="This code is invalid or has expired. Request a new one.")
+    user = db.scalar(select(User).where(User.email == email))
+    if not user:
+        raise invalid
     row = db.scalar(
-        select(PasswordResetToken).where(PasswordResetToken.token_hash == hash_reset_token(data.token))
+        select(PasswordResetToken)
+        .where(PasswordResetToken.user_id == user.id, PasswordResetToken.used.is_(False))
+        .order_by(PasswordResetToken.id.desc())
+        .limit(1)
     )
-    if not row or row.used or row.expires_at < utcnow():
-        raise HTTPException(status_code=400, detail="Reset link is invalid or has expired")
-    user = db.get(User, row.user_id)
+    if not row or row.expires_at < utcnow():
+        raise invalid
+    if (row.attempts or 0) >= settings.verification_max_attempts:
+        raise HTTPException(status_code=400, detail="Too many wrong codes. Request a new one.")
+    if not hmac.compare_digest(hash_verification_code(email, f"reset:{data.code}"), row.token_hash):
+        row.attempts = (row.attempts or 0) + 1
+        db.commit()
+        left = settings.verification_max_attempts - row.attempts
+        raise HTTPException(
+            status_code=400,
+            detail=f"That code isn't right. {left} attempt{'s' if left != 1 else ''} left."
+            if left
+            else "Too many wrong codes. Request a new one.",
+        )
     user.hashed_password = hash_password(data.new_password)
     user.token_version += 1  # sign out other sessions
     row.used = True

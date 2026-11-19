@@ -37,6 +37,9 @@ def upgrade_schema() -> None:
         return
     columns = {c["name"] for c in insp.get_columns("users")}
     tx_columns = {c["name"] for c in insp.get_columns("transactions")} if "transactions" in tables else set()
+    reset_columns = (
+        {c["name"] for c in insp.get_columns("password_reset_tokens")} if "password_reset_tokens" in tables else set()
+    )
     with engine.begin() as conn:
         if "google_sub" not in columns:
             conn.execute(text("ALTER TABLE users ADD COLUMN google_sub VARCHAR(64)"))
@@ -46,6 +49,8 @@ def upgrade_schema() -> None:
             conn.execute(
                 text("CREATE INDEX IF NOT EXISTS ix_transactions_income_source_id ON transactions (income_source_id)")
             )
+        if reset_columns and "attempts" not in reset_columns:
+            conn.execute(text("ALTER TABLE password_reset_tokens ADD COLUMN attempts INTEGER DEFAULT 0"))
 
 
 def get_db() -> Generator[Session, None, None]:

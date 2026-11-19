@@ -1,6 +1,6 @@
 import Feather from "@expo/vector-icons/Feather";
 import DateTimePicker, { DateTimePickerAndroid } from "@react-native-community/datetimepicker";
-import { format } from "date-fns";
+import { format } from "date-fns/format";
 import { LinearGradient } from "expo-linear-gradient";
 import * as React from "react";
 import {
