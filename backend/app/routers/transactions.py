@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
 from ..deps import DB, ClockDep, CurrentUser, get_owned, log_activity
-from ..models import Budget, ExpenseCategory, Transaction
+from ..models import Budget, ExpenseCategory, Loan, LoanEntry, Transaction
 from ..schemas import (
     BudgetIn,
     BudgetOut,
@@ -86,12 +86,19 @@ def create_transaction(data: TransactionIn, user: CurrentUser, db: DB):
 def update_transaction(tx_id: int, data: TransactionUpdate, user: CurrentUser, db: DB):
     tx = get_owned(db, Transaction, tx_id, user)
     changes = data.model_dump(exclude_unset=True)
+    entry = db.scalar(select(LoanEntry).where(LoanEntry.transaction_id == tx.id))
+    if entry is not None and changes.get("type") not in (None, tx.type):
+        raise HTTPException(status_code=400, detail="This is part of a loan, so it can't switch between income and expense.")
     if "category_id" in changes:
         _check_category(db, user, changes["category_id"])
     for key, value in changes.items():
         if value is None and key in {"type", "amount", "date", "payment_method"}:
             continue
         setattr(tx, key, value)
+    if entry is not None:
+        # Keep the loan in step with its Money record.
+        entry.amount = tx.amount
+        entry.date = tx.date
     log_activity(db, user, "updated", "transaction", f"Updated {tx.type} {_money(tx.amount)}", tx.id)
     db.commit()
     db.refresh(tx)
@@ -102,6 +109,14 @@ def update_transaction(tx_id: int, data: TransactionUpdate, user: CurrentUser, d
 def delete_transaction(tx_id: int, user: CurrentUser, db: DB):
     tx = get_owned(db, Transaction, tx_id, user)
     log_activity(db, user, "deleted", "transaction", f"Deleted {tx.type} {_money(tx.amount)}", tx.id)
+    # A loan entry recorded through this transaction goes with it; a loan left with no
+    # entries at all is removed too.
+    entry = db.scalar(select(LoanEntry).where(LoanEntry.transaction_id == tx.id))
+    if entry is not None:
+        loan = db.get(Loan, entry.loan_id)
+        loan.entries.remove(entry)
+        if not loan.entries:
+            db.delete(loan)
     db.delete(tx)
     db.commit()
 

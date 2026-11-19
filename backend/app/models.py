@@ -121,6 +121,69 @@ class Transaction(TimestampMixin, Base):
     category_id: Mapped[int | None] = mapped_column(
         ForeignKey("expense_categories.id", ondelete="SET NULL")
     )
+    # Set when added from a saved income source (Quick income), so the app can tick it per month.
+    income_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("income_sources.id", ondelete="SET NULL"), index=True
+    )
+
+    category: Mapped[ExpenseCategory | None] = relationship(lazy="joined")
+
+
+class Loan(TimestampMixin, Base):
+    """Money borrowed from (direction="borrowed") or lent to (direction="lent") a person.
+
+    The amounts live in LoanEntry rows: "principal" entries add to what is owed (the initial
+    amount, or borrowing more later) and "payment" entries pay it back.
+    """
+
+    __tablename__ = "loans"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    person: Mapped[str] = mapped_column(String(120))
+    direction: Mapped[str] = mapped_column(String(10))  # borrowed | lent
+    note: Mapped[str | None] = mapped_column(String(500))
+    due_date: Mapped[date | None] = mapped_column(Date)
+
+    entries: Mapped[list["LoanEntry"]] = relationship(
+        back_populates="loan",
+        cascade="all, delete-orphan",
+        order_by=lambda: (LoanEntry.date.desc(), LoanEntry.id.desc()),
+        lazy="selectin",
+    )
+
+
+class LoanEntry(Base):
+    __tablename__ = "loan_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    loan_id: Mapped[int] = mapped_column(ForeignKey("loans.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # principal | payment
+    amount: Mapped[float] = mapped_column(Float)
+    date: Mapped[date] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(String(255))
+    # The matching income/expense in Money (if recorded there). Deleting that transaction
+    # removes this entry too, so the loan and the monthly totals never disagree.
+    transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    loan: Mapped[Loan] = relationship(back_populates="entries")
+
+
+class IncomeSource(Base):
+    """A saved income source (e.g. "Office salary") for one-tap income entries."""
+
+    __tablename__ = "income_sources"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    amount: Mapped[float | None] = mapped_column(Float)
+    category_id: Mapped[int | None] = mapped_column(ForeignKey("expense_categories.id", ondelete="SET NULL"))
+    payment_method: Mapped[str] = mapped_column(String(30), default="bank")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     category: Mapped[ExpenseCategory | None] = relationship(lazy="joined")
 

@@ -13,7 +13,7 @@ import { PAYMENT_METHODS, PRIORITIES, RECURRENCES, SWATCHES, formatMoney, parseD
 
 type Errors = Record<string, string>;
 
-function useSubmit() {
+export function useSubmit() {
   const [saving, setSaving] = React.useState(false);
   const [errors, setErrors] = React.useState<Errors>({});
   async function run(fn: () => Promise<void>) {
@@ -81,8 +81,108 @@ export function TaskForm({ visible, onClose, task, defaultDue }: { visible: bool
           value={categoryId}
           onChange={setCategoryId}
         />
+        <NewCategory
+          existing={(cats ?? []).map((x) => x.name)}
+          suggestions={TASK_CATEGORY_SUGGESTIONS}
+          onCreate={async (name, color) => {
+            const cat = await api<TaskCategory>("/api/categories/tasks", { method: "POST", json: { name, color } });
+            invalidate("/api/categories/tasks");
+            return cat;
+          }}
+          onCreated={(cat) => setCategoryId(cat.id)}
+        />
       </Field>
     </Sheet>
+  );
+}
+
+const TASK_CATEGORY_SUGGESTIONS = ["Fitness", "Shopping", "Finance", "Family", "Errands", "Home", "Learning"];
+const EXPENSE_CATEGORY_SUGGESTIONS = ["Marathon", "Fitness", "Travel", "Rent", "Subscriptions", "Gifts", "Charity"];
+const INCOME_CATEGORY_SUGGESTIONS = ["Business", "Bonus", "Rental income", "Interest", "Refund"];
+const CATEGORY_COLORS = ["#F97316", "#0EA5E9", "#10B981", "#EC4899", "#8B5CF6", "#EAB308", "#64748B"];
+
+/** "+ New category" inside a form: one-tap suggestions (Fitness, Marathon, …) or a custom name. */
+function NewCategory<C extends { id: number; name: string }>({
+  existing,
+  suggestions: all,
+  onCreate,
+  onCreated,
+}: {
+  existing: string[];
+  suggestions: string[];
+  onCreate: (name: string, color: string) => Promise<C>;
+  onCreated: (c: C) => void;
+}) {
+  const c = useColors();
+  const [open, setOpen] = React.useState(false);
+  const [name, setName] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const taken = new Set(existing.map((n) => n.toLowerCase()));
+  const suggestions = all.filter((s) => !taken.has(s.toLowerCase()));
+
+  async function create(raw: string) {
+    const value = raw.trim();
+    if (!value) return;
+    if (taken.has(value.toLowerCase())) return toast(`"${value}" already exists`);
+    setBusy(true);
+    try {
+      const cat = await onCreate(value, CATEGORY_COLORS[existing.length % CATEGORY_COLORS.length]);
+      onCreated(cat);
+      setName("");
+      setOpen(false);
+      toast(`Category "${cat.name}" added`);
+    } catch (e) {
+      toast(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <Pressable onPress={() => setOpen(true)} hitSlop={6} style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", paddingVertical: 4 }}>
+        <Icon name="plus" size={15} color={c.foreground} />
+        <T variant="label">New category</T>
+      </Pressable>
+    );
+  }
+  return (
+    <View style={{ gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: c.border, backgroundColor: c.muted }}>
+      {suggestions.length ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {suggestions.map((s) => (
+            <Pressable
+              key={s}
+              onPress={() => create(s)}
+              disabled={busy}
+              style={({ pressed }) => ({
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 4,
+                paddingHorizontal: 12,
+                height: 32,
+                borderRadius: 16,
+                backgroundColor: pressed ? c.border : c.card,
+                borderWidth: 1,
+                borderColor: c.border,
+              })}
+            >
+              <Icon name="plus" size={13} color={c.foreground} />
+              <T variant="small" weight="600">{s}</T>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      <Row gap={8}>
+        <View style={{ flex: 1 }}>
+          <Input value={name} onChangeText={setName} placeholder="Or type a name" autoFocus={!suggestions.length} onSubmitEditing={() => create(name)} />
+        </View>
+        <Button title="Add" small onPress={() => create(name)} loading={busy} disabled={!name.trim()} />
+      </Row>
+      <Pressable onPress={() => setOpen(false)} hitSlop={6} style={{ alignSelf: "flex-start" }}>
+        <T variant="caption" muted>Cancel</T>
+      </Pressable>
+    </View>
   );
 }
 
@@ -117,7 +217,7 @@ export function TransactionForm({ visible, onClose, transaction, defaultType = "
       const json = { type, amount: value, description: description.trim() || null, payment_method: method, date: toISODate(date), category_id: categoryId };
       if (transaction) await api(`/api/transactions/${transaction.id}`, { method: "PATCH", json });
       else await api("/api/transactions", { method: "POST", json });
-      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity", "/api/reports");
+      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity", "/api/reports", "/api/income-sources", "/api/loans");
       toast(transaction ? "Transaction updated" : type === "income" ? "Income recorded" : "Expense recorded");
       onClose();
     });
@@ -156,6 +256,17 @@ export function TransactionForm({ visible, onClose, transaction, defaultType = "
           options={[{ value: null, label: "None" }, ...kindCats.map((x) => ({ value: x.id as number | null, label: x.name, color: x.color }))]}
           value={categoryId}
           onChange={setCategoryId}
+        />
+        <NewCategory
+          key={type}
+          existing={kindCats.map((x) => x.name)}
+          suggestions={type === "expense" ? EXPENSE_CATEGORY_SUGGESTIONS : INCOME_CATEGORY_SUGGESTIONS}
+          onCreate={async (name, color) => {
+            const cat = await api<ExpenseCategory>("/api/categories/expenses", { method: "POST", json: { name, color, kind: type } });
+            invalidate("/api/categories/expenses");
+            return cat;
+          }}
+          onCreated={(cat) => setCategoryId(cat.id)}
         />
       </Field>
       <DateField label="Date" value={date} onChange={(d) => d && setDate(d)} />

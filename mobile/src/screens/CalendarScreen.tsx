@@ -8,7 +8,7 @@ import { syncReminderNotifications } from "../notifications";
 import { invalidate, useQuery } from "../query";
 import { useColors } from "../theme";
 import type { Reminder, Task } from "../types";
-import { Badge, Button, Card, CardHeader, Fab, Icon, IconButton, IconTile, Row, Screen, Segmented, T, confirm, errorMessage, toast } from "../ui";
+import { Badge, Button, Card, CardHeader, Fab, Icon, IconButton, IconTile, MonthPicker, Row, Screen, Segmented, T, confirm, errorMessage, toast } from "../ui";
 import { RECURRENCES, friendlyDateTime, toISODate } from "../utils";
 
 export function CalendarScreen() {
@@ -48,13 +48,14 @@ export function CalendarScreen() {
     <View style={{ flex: 1 }}>
       <Screen title="Calendar" subtitle="Reminders & due tasks" refreshing={reminders.refreshing} onRefresh={refreshAll}>
         <Card style={{ gap: 10, padding: 12 }}>
-          <Row style={{ justifyContent: "space-between" }}>
-            <IconButton name="chevron-left" onPress={() => setMonth(addMonths(month, -1))} label="Previous month" />
-            <Pressable onPress={() => { setMonth(startOfMonth(new Date())); setSelected(new Date()); }}>
-              <T variant="h3">{format(month, "MMMM yyyy")}</T>
-            </Pressable>
-            <IconButton name="chevron-right" onPress={() => setMonth(addMonths(month, 1))} label="Next month" />
-          </Row>
+          <MonthPicker
+            value={month}
+            onChange={(m) => {
+              setMonth(m);
+              // Select today when returning to the current month, otherwise the 1st.
+              setSelected(isSameMonth(m, new Date()) ? new Date() : m);
+            }}
+          />
           <View style={{ flexDirection: "row" }}>
             {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d) => (
               <T key={d} variant="caption" muted style={{ flex: 1, textAlign: "center", fontWeight: "600" }}>{d.slice(0, 2)}</T>

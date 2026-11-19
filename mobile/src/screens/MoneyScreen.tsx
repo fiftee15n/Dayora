@@ -6,6 +6,7 @@ import { api, qs } from "../api";
 import { useUser } from "../auth";
 import { BarChart, Donut } from "../charts";
 import { BudgetForm, TransactionForm } from "../forms";
+import { LoansSummaryCard, QuickIncomeCard } from "./MoneyExtras";
 import { invalidate, useQuery } from "../query";
 import { useColors } from "../theme";
 import type { Budget, FinanceSummary, Page, Transaction, TxType } from "../types";
@@ -22,6 +23,7 @@ import {
   IconTile,
   Input,
   Loading,
+  MonthPicker,
   Progress,
   Row,
   Screen,
@@ -79,7 +81,7 @@ export function MoneyScreen() {
     try {
       await api(`/api/transactions/${tx.id}`, { method: "DELETE" });
       setItems((prev) => prev.filter((p) => p.id !== tx.id));
-      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity");
+      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity", "/api/income-sources", "/api/loans");
     } catch (e) {
       toast(errorMessage(e));
     }
@@ -102,16 +104,7 @@ export function MoneyScreen() {
   return (
     <View style={{ flex: 1 }}>
       <Screen title="Money" subtitle="Income, spending & budgets" refreshing={summary.refreshing || txs.refreshing} onRefresh={refresh}>
-        <Card style={{ paddingVertical: 10 }}>
-          <Row style={{ justifyContent: "space-between" }}>
-            <IconButton name="chevron-left" onPress={() => setMonth(addMonths(month, -1))} label="Previous month" />
-            <Pressable onPress={() => setMonth(startOfMonth(new Date()))}>
-              <T variant="h3">{format(month, "MMMM yyyy")}</T>
-              {!isCurrent ? <T variant="caption" color={c.primary} style={{ textAlign: "center" }}>Back to this month</T> : null}
-            </Pressable>
-            <IconButton name="chevron-right" onPress={() => setMonth(addMonths(month, 1))} label="Next month" />
-          </Row>
-        </Card>
+        <MonthPicker value={month} onChange={setMonth} />
 
         {summary.error && !s ? <ErrorBox error={summary.error} onRetry={refresh} /> : null}
         {summary.loading ? <Loading /> : null}
@@ -123,6 +116,9 @@ export function MoneyScreen() {
               <SumTile label="Expenses" value={formatMoney(s.expense, cur, true)} color={c.danger} icon="arrow-up-right" />
               <SumTile label="Balance" value={formatMoney(s.balance, cur, true)} color={s.balance >= 0 ? c.primary : c.danger} icon="pie-chart" />
             </Row>
+
+            <QuickIncomeCard />
+            <LoansSummaryCard />
 
             <Card style={{ gap: 14 }}>
               <CardHeader title="Spending by category" />

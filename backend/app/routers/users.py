@@ -13,6 +13,8 @@ from ..models import (
     Budget,
     ExpenseCategory,
     Habit,
+    IncomeSource,
+    Loan,
     Note,
     Reminder,
     Task,
@@ -26,6 +28,7 @@ from ..schemas import (
     AuthOut,
     BudgetOut,
     ExpenseCategoryOut,
+    IncomeSourceOut,
     NoteOut,
     PasswordChange,
     ProfileUpdate,
@@ -152,6 +155,21 @@ def export_data(user: CurrentUser, db: DB):
         ],
         "reminders": rows(Reminder, ReminderOut, Reminder.remind_at),
         "notes": rows(Note, NoteOut),
+        "loans": [
+            {
+                "id": l.id,
+                "person": l.person,
+                "direction": l.direction,
+                "note": l.note,
+                "due_date": l.due_date.isoformat() if l.due_date else None,
+                "entries": [
+                    {"kind": e.kind, "amount": e.amount, "date": e.date.isoformat(), "note": e.note}
+                    for e in l.entries
+                ],
+            }
+            for l in db.scalars(select(Loan).where(Loan.user_id == user.id).order_by(Loan.id))
+        ],
+        "income_sources": rows(IncomeSource, IncomeSourceOut),
         "activity": rows(ActivityLog, ActivityOut, ActivityLog.created_at),
     }
     filename = f"dayora-export-{Date.today().isoformat()}.json"

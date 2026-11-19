@@ -35,6 +35,10 @@ const SunDimIcon: Icon = require("phosphor-react-native/src/icons/SunDim").SunDi
 const TrashIcon: Icon = require("phosphor-react-native/src/icons/Trash").TrashIcon;
 const UserIcon: Icon = require("phosphor-react-native/src/icons/User").UserIcon;
 const BellSimpleIcon: Icon = require("phosphor-react-native/src/icons/BellSimple").BellSimpleIcon;
+const UsersIcon: Icon = require("phosphor-react-native/src/icons/Users").UsersIcon;
+const LightningIcon: Icon = require("phosphor-react-native/src/icons/Lightning").LightningIcon;
+const ArrowCounterClockwiseIcon: Icon = require("phosphor-react-native/src/icons/ArrowCounterClockwise").ArrowCounterClockwiseIcon;
+const QuestionIcon: Icon = require("phosphor-react-native/src/icons/Question").QuestionIcon;
 const CheckIcon: Icon = require("phosphor-react-native/src/icons/Check").CheckIcon;
 const CheckCircleIcon: Icon = require("phosphor-react-native/src/icons/CheckCircle").CheckCircleIcon;
 const CoinsIcon: Icon = require("phosphor-react-native/src/icons/Coins").CoinsIcon;
@@ -91,6 +95,10 @@ const ICONS = {
   "trash": TrashIcon,
   "user": UserIcon,
   "bell-simple": BellSimpleIcon,
+  users: UsersIcon,
+  lightning: LightningIcon,
+  undo: ArrowCounterClockwiseIcon,
+  question: QuestionIcon,
   check: CheckIcon,
   "check-circle": CheckCircleIcon,
   coins: CoinsIcon,

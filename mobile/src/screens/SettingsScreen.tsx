@@ -79,7 +79,7 @@ export function SettingsScreen() {
   }
 
   async function logOut() {
-    if (await confirm("Log out?", "You can sign back in any time.", "Log out", false)) signOut();
+    if (await confirm("Log out?", "You can sign back in any time.", "Log out", false, "sign-out")) signOut();
   }
 
   async function deleteAccount() {
@@ -395,7 +395,7 @@ function PasswordSheet({ visible, onClose }: { visible: boolean; onClose: () => 
   }
 
   async function signOutEverywhere() {
-    if (await confirm("Log out everywhere?", "You'll be logged out on every browser and phone, including this one.", "Log out", false)) {
+    if (await confirm("Log out everywhere?", "You'll be logged out on every browser and phone, including this one.", "Log out", false, "device")) {
       onClose();
       signOut({ everywhere: true });
     }

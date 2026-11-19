@@ -119,7 +119,7 @@ export function DashboardScreen() {
 
         {data ? (
           <>
-            <FocusCard data={data} onOpenMoney={() => nav.navigate("Money")} onOpenTasks={() => nav.navigate("Tasks")} />
+            <FocusCard data={data} onOpenMoney={() => nav.navigate("Money")} />
 
             {/* ------------------------------------------------ quick add */}
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -233,10 +233,8 @@ export function DashboardScreen() {
 // ================================================================ focus card
 
 /** The one dark card: money first (balance + today's spending), today's tasks as a strip below. */
-function FocusCard({ data, onOpenMoney, onOpenTasks }: { data: Dashboard; onOpenMoney: () => void; onOpenTasks: () => void }) {
+function FocusCard({ data, onOpenMoney }: { data: Dashboard; onOpenMoney: () => void }) {
   const f = data.finance;
-  const total = data.tasks.due_today;
-  const done = data.tasks.due_today_completed;
   const negative = f.month_balance < 0;
   return (
     <View style={s.focus}>
@@ -266,41 +264,15 @@ function FocusCard({ data, onOpenMoney, onOpenTasks }: { data: Dashboard; onOpen
           {formatMoney(f.month_balance, f.currency)}
         </Text>
         <Text style={{ color: K.onInkSub, fontSize: 13, marginTop: 2 }} numberOfLines={1}>
-          {formatMoney(f.month_income, f.currency, true)} in · {formatMoney(f.month_expense, f.currency, true)} out this month
+          {formatMoney(f.month_expense, f.currency, true)} spent so far this month
         </Text>
       </Pressable>
 
-      {/* ---- today */}
+      {/* ---- today's spending + this month's income */}
       <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
         <TodayMoney icon="arrow-out" label="Spent today" value={formatMoney(f.today_expense, f.currency)} strong />
-        <TodayMoney icon="arrow-in" label="Earned today" value={formatMoney(f.today_income, f.currency)} />
+        <TodayMoney icon="arrow-in" label={`Earned in ${format(new Date(), "MMM")}`} value={formatMoney(f.month_income, f.currency)} />
       </View>
-
-      <View style={{ height: 1, backgroundColor: K.onInkA(0.1), marginVertical: 18 }} />
-
-      {/* ---- tasks strip */}
-      <Pressable onPress={onOpenTasks} style={({ pressed }) => pressed && { opacity: 0.85 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-            <Text style={{ color: K.onInk, fontSize: 15, fontWeight: "800", fontVariant: ["tabular-nums"] }}>
-              {done}/{total}
-            </Text>
-            <Text style={{ color: K.onInkMuted, fontSize: 13 }}>tasks today</Text>
-          </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            {data.tasks.overdue ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#FF5A4E" }} />
-                <Text style={{ color: K.onInkSoft, fontSize: 12, fontWeight: "600" }}>{data.tasks.overdue} overdue</Text>
-              </View>
-            ) : null}
-            <Text style={{ color: K.onInkSoft, fontSize: 12, fontWeight: "600" }}>
-              Habits {data.habits.done}/{data.habits.total}
-            </Text>
-          </View>
-        </View>
-        <Segments total={total} done={done} />
-      </Pressable>
     </View>
   );
 }
@@ -337,27 +309,6 @@ function TodayMoney({ icon, label, value, strong }: { icon: GlyphName; label: st
       >
         {value}
       </Text>
-    </View>
-  );
-}
-
-/** One segment per task when there are few; a continuous bar beyond that. */
-function Segments({ total, done }: { total: number; done: number }) {
-  const on = K.onInk;
-  const off = K.onInkA(0.14);
-  if (total === 0) return <View style={{ height: 6, borderRadius: 3, backgroundColor: off, marginTop: 16 }} />;
-  if (total > 12) {
-    return (
-      <View style={{ height: 6, borderRadius: 3, backgroundColor: off, marginTop: 16, overflow: "hidden" }}>
-        <View style={{ width: `${(done / total) * 100}%`, height: "100%", backgroundColor: on }} />
-      </View>
-    );
-  }
-  return (
-    <View style={{ flexDirection: "row", gap: 4, marginTop: 16 }}>
-      {Array.from({ length: total }, (_, i) => (
-        <View key={i} style={{ flex: 1, height: 6, borderRadius: 3, backgroundColor: i < done ? on : off }} />
-      ))}
     </View>
   );
 }
