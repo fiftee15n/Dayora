@@ -2,6 +2,7 @@ from collections.abc import Generator
 
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 from .config import settings
 
@@ -9,8 +10,12 @@ _is_sqlite = settings.database_url.startswith("sqlite")
 
 engine = create_engine(
     settings.database_url,
-    connect_args={"check_same_thread": False} if _is_sqlite else {},
+    # SQLite: allow use across threads. Postgres via Neon's pooler (PgBouncer): don't use
+    # server-side prepared statements, which a transaction pooler can't keep track of.
+    connect_args={"check_same_thread": False} if _is_sqlite else {"prepare_threshold": None},
     pool_pre_ping=not _is_sqlite,
+    # Serverless instances come and go: don't hold connections open between requests.
+    **({"poolclass": NullPool} if settings.serverless and not _is_sqlite else {}),
 )
 
 if _is_sqlite:

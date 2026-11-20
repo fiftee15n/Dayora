@@ -1,5 +1,7 @@
+import os
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,6 +11,16 @@ class Settings(BaseSettings):
     app_name: str = "Dayora API"
     app_env: str = "development"
     database_url: str = "sqlite:///./dayora.db"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _postgres_driver(cls, v: str) -> str:
+        """Neon / Vercel give postgres:// or postgresql:// URLs; use the psycopg 3 driver."""
+        v = (v or "").strip()
+        for prefix in ("postgres://", "postgresql://"):
+            if v.startswith(prefix):
+                return "postgresql+psycopg://" + v[len(prefix):]
+        return v
 
     jwt_secret: str = "change-me"
     jwt_algorithm: str = "HS256"
@@ -41,6 +53,11 @@ class Settings(BaseSettings):
     # Google sign-in: comma-separated OAuth client IDs whose ID tokens are accepted
     # (the "Web application" client ID used as webClientId in the app). Empty disables it.
     google_client_ids: str = ""
+
+    @property
+    def serverless(self) -> bool:
+        """Running on Vercel: no persistent disk, and work after the response may be cut off."""
+        return bool(os.environ.get("VERCEL"))
 
     @property
     def is_dev(self) -> bool:

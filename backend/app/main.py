@@ -51,8 +51,12 @@ async def security_headers(request: Request, call_next):
 for r in (auth, users, categories, tasks, transactions, loans, habits, prayers, reminders, notes, insights):
     app.include_router(r.router)
 
-Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
+app.include_router(users.avatar_router)
+
+# Older installs kept profile pictures on disk; keep serving them locally. (Vercel has no disk.)
+if not settings.serverless:
+    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
+    app.mount("/uploads", StaticFiles(directory=settings.upload_dir), name="uploads")
 
 
 @app.get("/api/health", tags=["meta"])

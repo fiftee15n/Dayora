@@ -9,6 +9,7 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    LargeBinary,
     String,
     Text,
     UniqueConstraint,
@@ -56,6 +57,18 @@ class PendingSignup(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     sent_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     attempts: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class Avatar(Base):
+    """Profile picture bytes. Stored in the database so it survives on hosts without a disk."""
+
+    __tablename__ = "avatars"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    token: Mapped[str] = mapped_column(String(32))  # part of the URL; changes on every upload
+    content_type: Mapped[str] = mapped_column(String(40))
+    data: Mapped[bytes] = mapped_column(LargeBinary)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
 
 
 class PasswordResetToken(Base):
