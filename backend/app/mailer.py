@@ -10,6 +10,15 @@ from .config import settings
 log = logging.getLogger("dayora.mail")
 
 
+def deliver(background, fn, *args) -> None:
+    """Send after the response normally; on serverless hosts (Vercel) send right away, because
+    work after the response may never run there."""
+    if settings.serverless:
+        fn(*args)
+    else:
+        background.add_task(fn, *args)
+
+
 def send_email(to: str, subject: str, text: str, html: str | None = None) -> bool:
     """Send an email. Never raises: failures are logged so API requests don't break."""
     if not settings.email_enabled:

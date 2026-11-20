@@ -81,7 +81,12 @@ def test_profile_update_and_avatar(auth):
     assert r.json()["name"] == "Sara K" and r.json()["currency"] == "PKR"
     png = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
     r = auth.post("/api/users/me/avatar", files={"file": ("a.png", png, "image/png")})
-    assert r.status_code == 200 and r.json()["avatar_url"].startswith("/uploads/avatars/")
+    url = r.json()["avatar_url"]
+    assert r.status_code == 200 and url.startswith("/api/avatars/")
+    # The picture is served from the database, without auth (the URL holds a random token).
+    img = auth.get(url, headers={"Authorization": ""})
+    assert img.status_code == 200 and img.content == png and img.headers["content-type"] == "image/png"
+    assert auth.get(url.rsplit("/", 1)[0] + "/wrongtoken").status_code == 404
     r = auth.post("/api/users/me/avatar", files={"file": ("a.png", b"not an image", "image/png")})
     assert r.status_code == 415
 

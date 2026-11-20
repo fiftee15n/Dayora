@@ -9,7 +9,7 @@ from sqlalchemy import select
 from ..config import settings
 from ..deps import DB, CurrentUser, log_activity
 from ..google_auth import GoogleNotConfigured, GoogleTokenError, verify_google_id_token
-from ..mailer import send_password_reset_code, send_verification_code
+from ..mailer import deliver, send_password_reset_code, send_verification_code
 from ..models import ExpenseCategory, PasswordResetToken, PendingSignup, TaskCategory, User, utcnow
 from ..schemas import (
     AuthOut,
@@ -137,7 +137,7 @@ def _send_new_code(pending: PendingSignup, background: BackgroundTasks) -> str:
     pending.expires_at = utcnow() + timedelta(minutes=settings.verification_code_expire_minutes)
     pending.sent_at = utcnow()
     pending.attempts = 0
-    background.add_task(send_verification_code, pending.email, code, settings.verification_code_expire_minutes)
+    deliver(background, send_verification_code, pending.email, code, settings.verification_code_expire_minutes)
     return code
 
 
@@ -313,7 +313,7 @@ def forgot_password(data: ForgotPasswordIn, db: DB, background: BackgroundTasks)
         )
     )
     db.commit()
-    background.add_task(send_password_reset_code, user.email, user.name, code, minutes)
+    deliver(background, send_password_reset_code, user.email, user.name, code, minutes)
     # Without an email provider in development, hand the code back so the flow can be tested.
     if settings.is_dev and not settings.email_enabled:
         msg["dev_reset_code"] = code
