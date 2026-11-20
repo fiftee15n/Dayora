@@ -12,6 +12,19 @@ const STAGING = `
         externalNativeBuild {
             cmake {
                 buildStagingDirectory = file(System.getenv("CXX_STAGING_DIR"))
+                // Ninja 1.12+ (in CMake 3.31) supports long paths once Windows' LongPathsEnabled is on.
+                if (System.getenv("DAYORA_CMAKE_VERSION")) {
+                    version System.getenv("DAYORA_CMAKE_VERSION")
+                }
+            }
+        }
+        // Release builds use a longer folder (RelWithDebInfo); let CMake hash object paths
+        // longer than 128 characters so they stay under Windows' 260-character limit.
+        defaultConfig {
+            externalNativeBuild {
+                cmake {
+                    arguments "-DCMAKE_OBJECT_PATH_MAX=128"
+                }
             }
         }
     }
