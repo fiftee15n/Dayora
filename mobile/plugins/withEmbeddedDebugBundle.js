@@ -17,6 +17,23 @@ const STAGING = `
     }
 `;
 
+const RELEASE_PROPS = `// Dayora: release signing key (mobile/credentials/keystore.properties, never committed)
+def dayoraKeystoreProps = new Properties()
+def dayoraKeystoreFile = rootProject.file("../credentials/keystore.properties")
+if (dayoraKeystoreFile.exists()) {
+    dayoraKeystoreFile.withInputStream { dayoraKeystoreProps.load(it) }
+}`;
+
+const RELEASE_SIGNING = `        if (dayoraKeystoreFile.exists()) {
+            release {
+                storeFile rootProject.file("../credentials/" + dayoraKeystoreProps["storeFile"])
+                storePassword dayoraKeystoreProps["storePassword"]
+                keyAlias dayoraKeystoreProps["keyAlias"]
+                keyPassword dayoraKeystoreProps["keyPassword"]
+            }
+        }
+`;
+
 module.exports = function withEmbeddedDebugBundle(config) {
   return withAppBuildGradle(config, (cfg) => {
     let src = cfg.modResults.contents;
@@ -26,6 +43,17 @@ module.exports = function withEmbeddedDebugBundle(config) {
     }
     if (!src.includes("CXX_STAGING_DIR")) {
       src = src.replace(/\nandroid \{\n/, `\nandroid {\n${STAGING}`);
+    }
+    // 3. Release signing with the private key in mobile/credentials/ (git-ignored). Without that
+    //    folder, release builds fall back to the debug key, as in the Expo template.
+    if (!src.includes("dayoraKeystoreFile")) {
+      // The release *build type* (inside buildTypes, after the debug one) switches key.
+      src = src.replace(
+        /(buildTypes \{[\s\S]*?\n\s*release \{[\s\S]*?)signingConfig signingConfigs\.debug/,
+        "$1signingConfig dayoraKeystoreFile.exists() ? signingConfigs.release : signingConfigs.debug",
+      );
+      src = src.replace(/\nandroid \{\n/, `\n${RELEASE_PROPS}\nandroid {\n`);
+      src = src.replace(/signingConfigs \{\n/, `signingConfigs {\n${RELEASE_SIGNING}`);
     }
     cfg.modResults.contents = src;
     return cfg;
