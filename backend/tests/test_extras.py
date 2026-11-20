@@ -110,17 +110,18 @@ def test_category_update_is_owner_only(client):
     assert client.patch(f"/api/categories/tasks/{cat_id}", json={"name": "Hax"}).status_code == 404
 
 
-def test_avatar_remove_and_account_delete_clean_up_files(auth):
-    user = auth.post("/api/users/me/avatar", files={"file": ("a.png", PNG, "image/png")}).json()
-    path = Path(settings.upload_dir) / "avatars" / Path(user["avatar_url"]).name
-    assert path.exists()
+def test_avatar_remove_and_account_delete_clean_up(auth):
+    url = auth.post("/api/users/me/avatar", files={"file": ("a.png", PNG, "image/png")}).json()["avatar_url"]
+    assert auth.get(url).status_code == 200
+    # A new upload replaces the old picture (old URL stops working).
+    url2 = auth.post("/api/users/me/avatar", files={"file": ("b.png", PNG, "image/png")}).json()["avatar_url"]
+    assert url2 != url and auth.get(url).status_code == 404 and auth.get(url2).status_code == 200
     r = auth.delete("/api/users/me/avatar")
-    assert r.json()["avatar_url"] is None and not path.exists()
+    assert r.json()["avatar_url"] is None and auth.get(url2).status_code == 404
 
-    user = auth.post("/api/users/me/avatar", files={"file": ("a.png", PNG, "image/png")}).json()
-    path = Path(settings.upload_dir) / "avatars" / Path(user["avatar_url"]).name
+    url = auth.post("/api/users/me/avatar", files={"file": ("a.png", PNG, "image/png")}).json()["avatar_url"]
     assert auth.delete("/api/users/me").status_code == 204
-    assert not path.exists()
+    assert auth.get(url).status_code == 404
 
 
 def test_export_contains_only_own_data(client):

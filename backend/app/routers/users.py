@@ -1,3 +1,4 @@
+import secrets
 import uuid
 from datetime import date as Date
 from pathlib import Path
@@ -10,6 +11,7 @@ from ..config import settings
 from ..deps import DB, CurrentUser, log_activity
 from ..models import (
     ActivityLog,
+    Avatar,
     Budget,
     ExpenseCategory,
     Habit,
@@ -43,6 +45,7 @@ from ..security import hash_password, verify_password
 from .auth import _issue
 
 router = APIRouter(prefix="/api/users", tags=["users"])
+avatar_router = APIRouter(tags=["users"])
 
 _IMAGE_SIGNATURES = {
     b"\x89PNG\r\n\x1a\n": ".png",
@@ -99,13 +102,15 @@ async def upload_avatar(file: UploadFile, user: CurrentUser, db: DB):
     if not ext:
         raise HTTPException(status_code=415, detail="Please upload a PNG, JPEG, GIF or WebP image")
 
-    folder = Path(settings.upload_dir) / "avatars"
-    folder.mkdir(parents=True, exist_ok=True)
-    name = f"{user.id}_{uuid.uuid4().hex}{ext}"
-    (folder / name).write_bytes(content)
-
     _remove_avatar_file(user)
-    user.avatar_url = f"/uploads/avatars/{name}"
+    token = uuid.uuid4().hex
+    row = db.get(Avatar, user.id)
+    if row is None:
+        row = Avatar(user_id=user.id, token=token, content_type=_MIME[ext], data=content)
+        db.add(row)
+    else:
+        row.token, row.content_type, row.data = token, _MIME[ext], content
+    user.avatar_url = f"/api/avatars/{user.id}/{token}"
     db.commit()
     return user
 
@@ -113,12 +118,28 @@ async def upload_avatar(file: UploadFile, user: CurrentUser, db: DB):
 @router.delete("/me/avatar", response_model=UserOut)
 def remove_avatar(user: CurrentUser, db: DB):
     _remove_avatar_file(user)
+    row = db.get(Avatar, user.id)
+    if row is not None:
+        db.delete(row)
     user.avatar_url = None
     db.commit()
     return user
 
 
+_MIME = {".png": "image/png", ".jpg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp"}
+
+
+@avatar_router.get("/api/avatars/{user_id}/{token}", include_in_schema=False)
+def get_avatar(user_id: int, token: str, db: DB):
+    """Public (unguessable token in the URL) so <Image> can load it without auth headers."""
+    row = db.get(Avatar, user_id)
+    if row is None or not secrets.compare_digest(row.token, token):
+        raise HTTPException(status_code=404, detail="Not found")
+    return Response(content=row.data, media_type=row.content_type, headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 def _remove_avatar_file(user: User) -> None:
+    """Remove a picture from the older on-disk storage, if this account still has one."""
     if user.avatar_url and user.avatar_url.startswith("/uploads/avatars/"):
         (Path(settings.upload_dir) / "avatars" / Path(user.avatar_url).name).unlink(missing_ok=True)
 
