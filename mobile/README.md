@@ -4,20 +4,23 @@ Native Android app for Dayora: dashboard, tasks, money & budgets, habits, calend
 reminders (with local notifications), notes, history/reports and settings. It talks to the
 FastAPI backend with a Bearer token stored in the device's secure storage.
 
-## Run the API so the phone can reach it
+## Which API the app uses
+
+By default the app talks to the hosted API at **https://dayora-api.vercel.app** (Vercel,
+Neon Postgres). It's set by `expo.extra.defaultApiUrl` in `app.json`.
+
+To test against a backend on your PC instead, run it on the network:
 
 ```bash
 cd backend
 .venv\Scripts\activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-The phone must be on the same Wi-Fi as the PC, and Windows Firewall must allow inbound
-TCP 8000 (allow Python when Windows asks, or add a rule for port 8000).
-
-The app's server URL can be changed on the sign-in screen ("Server: …") or in
-Settings → Server. The default comes from `expo.extra.defaultApiUrl` in `app.json`.
-On the Android emulator use `http://10.0.2.2:8000`.
+then press and hold the logo on the sign-in screen and enter `http://<your-pc-ip>:8000`
+(Android emulator: `http://10.0.2.2:8000`). Windows Firewall must allow inbound TCP 8000.
+A saved local address is replaced by the hosted API automatically on the next launch of a
+build whose default is `https://`.
 
 ## Debug APK = development build (loads the app from `npx expo start`)
 
