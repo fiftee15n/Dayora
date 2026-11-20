@@ -27,7 +27,10 @@ export async function loadSession() {
     SecureStore.getItemAsync(SERVER_KEY),
   ]);
   token = t;
-  if (s) server = s;
+  // A saved local-network address (from testing against a PC) is replaced by the hosted API.
+  const local = s && /^http:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(s);
+  if (s && !(local && DEFAULT_SERVER.startsWith("https://"))) server = s;
+  else if (s) await SecureStore.deleteItemAsync(SERVER_KEY);
   return { token, server };
 }
 
