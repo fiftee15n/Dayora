@@ -3,11 +3,11 @@
 from datetime import date, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
 from ..deps import DB, ClockDep, CurrentUser
-from ..models import ActivityLog, Budget, Habit, HabitLog, Reminder, Task, Transaction
+from ..models import ActivityLog, Budget, Habit, HabitLog, Loan, Reminder, SavingsGoal, Task, Transaction
 from ..schemas import ActivityOut, Page, ReminderOut, TaskOut
 from .habits import habit_stats
 
@@ -281,3 +281,175 @@ def activity(
         .limit(page_size)
     ).all()
     return Page[ActivityOut](items=items, total=total, page=page, page_size=page_size)
+
+
+# ---------------------------------------------------------------- monthly report
+
+def _month_span(key: str) -> tuple[date, date]:
+    y, m = int(key[:4]), int(key[5:])
+    start = date(y, m, 1)
+    end = date(y + (m == 12), m % 12 + 1, 1) - timedelta(days=1)
+    return start, end
+
+
+def _prev_key(key: str) -> str:
+    start, _ = _month_span(key)
+    return (start - timedelta(days=1)).strftime("%Y-%m")
+
+
+def _money_totals(db, user, start: date, end: date) -> tuple[float, float, list[Transaction]]:
+    rows = db.scalars(
+        select(Transaction).where(Transaction.user_id == user.id, Transaction.date >= start, Transaction.date <= end)
+    ).unique().all()
+    income = round(sum(t.amount for t in rows if t.type == "income"), 2)
+    expense = round(sum(t.amount for t in rows if t.type == "expense"), 2)
+    return income, expense, rows
+
+
+def _change(now: float, before: float) -> float | None:
+    return round((now - before) / before * 100, 1) if before else None
+
+
+@router.get("/reports/monthly")
+def monthly_report(
+    user: CurrentUser,
+    db: DB,
+    clock: ClockDep,
+    month: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$", description="Default: last month"),
+):
+    """One-page summary of a month: money in and out, daily average, loans and savings.
+
+    Defaults to the month that just ended. The current month is allowed too (marked partial).
+    """
+    today = clock.today
+    key = month or _prev_key(today.strftime("%Y-%m"))
+    start, end = _month_span(key)
+    if start > today:
+        raise HTTPException(status_code=400, detail="That month hasn't started yet.")
+    partial = end >= today
+    last = min(end, today)
+    days = (last - start).days + 1
+
+    income, expense, rows = _money_totals(db, user, start, end)
+    p_start, p_end = _month_span(_prev_key(key))
+    p_income, p_expense, _ = _money_totals(db, user, p_start, p_end)
+
+    # Spending by category, biggest single expense and the most expensive day.
+    by_cat: dict[str, dict] = {}
+    per_day: dict[date, float] = {}
+    biggest = None
+    for t in rows:
+        if t.type != "expense":
+            continue
+        name = t.category.name if t.category else "Uncategorized"
+        c = by_cat.setdefault(name, {"name": name, "color": t.category.color if t.category else "#94A3B8", "total": 0.0})
+        c["total"] = round(c["total"] + t.amount, 2)
+        per_day[t.date] = per_day.get(t.date, 0) + t.amount
+        if biggest is None or t.amount > biggest.amount:
+            biggest = t
+    categories = sorted(by_cat.values(), key=lambda c: c["total"], reverse=True)
+    for c in categories:
+        c["percent"] = round(c["total"] / expense * 100, 1) if expense else 0
+    top_day = max(per_day.items(), key=lambda kv: kv[1], default=None)
+
+    # Income that belonged to another month, both ways (salary paid in arrears).
+    for_other = round(sum(t.amount for t in rows if t.type == "income" and t.for_month and t.for_month != key), 2)
+    received_later = db.scalars(
+        select(Transaction).where(
+            Transaction.user_id == user.id, Transaction.type == "income", Transaction.for_month == key,
+            (Transaction.date < start) | (Transaction.date > end),
+        )
+    ).unique().all()
+
+    # Loans as they stood at the end of the month.
+    owed_to_me, i_owe = [], []
+    lent_out = borrowed_in = repaid_to_me = repaid_by_me = 0.0
+    for loan in db.scalars(select(Loan).where(Loan.user_id == user.id)).unique().all():
+        upto = [e for e in loan.entries if e.date <= last]
+        remaining = round(sum(e.amount if e.kind == "principal" else -e.amount for e in upto), 2)
+        for e in loan.entries:
+            if start <= e.date <= end:
+                if loan.direction == "lent":
+                    if e.kind == "principal":
+                        lent_out += e.amount
+                    else:
+                        repaid_to_me += e.amount
+                else:
+                    if e.kind == "principal":
+                        borrowed_in += e.amount
+                    else:
+                        repaid_by_me += e.amount
+        if remaining > 0.005:
+            row = {"id": loan.id, "person": loan.person, "amount": remaining}
+            (owed_to_me if loan.direction == "lent" else i_owe).append(row)
+    owed_to_me.sort(key=lambda r: -r["amount"])
+    i_owe.sort(key=lambda r: -r["amount"])
+
+    # Savings: what was put aside this month, goals completed this month, and goals still running.
+    put_aside = taken_out = 0.0
+    completed, in_progress = [], []
+    for g in db.scalars(select(SavingsGoal).where(SavingsGoal.user_id == user.id).order_by(SavingsGoal.id)).all():
+        closing = ("Left over", "Spent beyond savings")
+        for e in g.entries:
+            if start <= e.date <= end and e.note not in closing:
+                if e.kind == "deposit":
+                    put_aside += e.amount
+                else:
+                    taken_out += e.amount
+        if g.completed_on and start <= g.completed_on <= end:
+            completed.append({"id": g.id, "name": g.name, "spent": g.spent or 0, "leftover": g.leftover or 0,
+                              "target": g.target, "completed_on": g.completed_on.isoformat()})
+        elif not g.completed_on or g.completed_on > last:
+            saved = round(sum((e.amount if e.kind == "deposit" else -e.amount) for e in g.entries
+                              if e.date <= last and e.note not in closing), 2)
+            # Existed by then (created, or has savings dated, on or before the month's end).
+            if g.created_at.date() <= last or any(e.date <= last for e in g.entries):
+                in_progress.append({"id": g.id, "name": g.name, "saved": saved, "target": g.target,
+                                    "progress": round(min(100.0, saved / g.target * 100), 1) if g.target else None})
+
+    return {
+        "month": key,
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "partial": partial,
+        "days": days,
+        "has_data": bool(rows) or bool(owed_to_me or i_owe or completed or in_progress),
+        "income": income,
+        "expense": expense,
+        "balance": round(income - expense, 2),
+        "avg_daily_expense": round(expense / days, 2) if days else 0,
+        "transactions": len(rows),
+        "previous": {
+            "month": _prev_key(key),
+            "income": p_income,
+            "expense": p_expense,
+            "income_change": _change(income, p_income),
+            "expense_change": _change(expense, p_expense),
+        },
+        "top_categories": categories[:5],
+        "biggest_expense": {
+            "amount": biggest.amount,
+            "description": biggest.description or (biggest.category.name if biggest.category else "Expense"),
+            "date": biggest.date.isoformat(),
+        } if biggest else None,
+        "top_spending_day": {"date": top_day[0].isoformat(), "amount": round(top_day[1], 2)} if top_day else None,
+        "income_for_other_months": for_other,
+        "received_later": round(sum(t.amount for t in received_later), 2),
+        "loans": {
+            "owed_to_me": round(sum(r["amount"] for r in owed_to_me), 2),
+            "i_owe": round(sum(r["amount"] for r in i_owe), 2),
+            "owed_to_me_people": owed_to_me[:5],
+            "i_owe_people": i_owe[:5],
+            "lent_this_month": round(lent_out, 2),
+            "borrowed_this_month": round(borrowed_in, 2),
+            "repaid_to_me_this_month": round(repaid_to_me, 2),
+            "repaid_by_me_this_month": round(repaid_by_me, 2),
+        },
+        "savings": {
+            "put_aside": round(put_aside, 2),
+            "taken_out": round(taken_out, 2),
+            "net": round(put_aside - taken_out, 2),
+            "completed": completed,
+            "in_progress": in_progress,
+        },
+    }

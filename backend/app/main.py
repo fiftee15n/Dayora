@@ -8,7 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from . import models  # noqa: F401  (register tables)
 from .config import settings
 from .database import Base, engine, upgrade_schema
-from .routers import auth, categories, habits, insights, loans, notes, prayers, reminders, tasks, transactions, users
+from .routers import auth, categories, habits, insights, loans, notes, prayers, reminders, savings, tasks, transactions, users
 
 
 @asynccontextmanager
@@ -48,7 +48,7 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-for r in (auth, users, categories, tasks, transactions, loans, habits, prayers, reminders, notes, insights):
+for r in (auth, users, categories, tasks, transactions, loans, savings, habits, prayers, reminders, notes, insights):
     app.include_router(r.router)
 
 app.include_router(users.avatar_router)

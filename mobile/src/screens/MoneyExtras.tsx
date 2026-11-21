@@ -5,13 +5,13 @@ import { Pressable, Text, View } from "react-native";
 
 import { api } from "../api";
 import { useUser } from "../auth";
-import { useSubmit } from "../forms";
+import { ForMonthField, useSubmit } from "../forms";
 import { Glyph } from "../icons";
 import { invalidate, useQuery } from "../query";
 import { useColors } from "../theme";
 import type { ExpenseCategory, IncomeSource, LoanList, Transaction } from "../types";
 import { Button, Chips, DateField, Field, Input, Sheet, confirm, errorMessage, toast } from "../ui";
-import { PAYMENT_METHODS, formatMoney, parseDateOnly, toISODate } from "../utils";
+import { PAYMENT_METHODS, formatMoney, monthKey, monthLabel, parseDateOnly, previousMonthKey, toISODate } from "../utils";
 
 /* Two cards for the Money tab: a summary of loans (opens the Loans folders) and
    "Quick income" — saved income sources you add with a tap. */
@@ -67,14 +67,17 @@ export function LoansSummaryCard() {
  * Quick income: a monthly checklist of saved sources. Tap to tick = income added today;
  * tap a ticked one to undo. Ticks reset each month.
  */
-export function QuickIncomeCard() {
+/** Ticks are for `month` (the month picked on the Money tab). */
+export function QuickIncomeCard({ month }: { month: Date }) {
   const c = useColors();
   const cur = useUser().currency;
-  const { data: sources, mutate } = useQuery<IncomeSource[]>("/api/income-sources");
+  const key = monthKey(month);
+  const isThisMonth = key === monthKey(new Date());
+  const { data: sources, mutate } = useQuery<IncomeSource[]>(`/api/income-sources?month=${key}`);
   const [busy, setBusy] = React.useState<number | null>(null);
   const [needsAmount, setNeedsAmount] = React.useState<IncomeSource | null>(null);
   const [editing, setEditing] = React.useState<{ open: boolean; source?: IncomeSource | null }>({ open: false });
-  const monthName = format(new Date(), "MMMM");
+  const monthName = monthLabel(key);
   const done = (sources ?? []).filter((s) => s.this_month_transaction_id).length;
 
   function afterChange() {
@@ -84,7 +87,8 @@ export function QuickIncomeCard() {
   async function tick(s: IncomeSource) {
     if (busy) return;
     if (s.this_month_transaction_id) return untick(s);
-    if (!s.amount) return setNeedsAmount(s); // no saved amount: ask once
+    // No saved amount, or another month is selected: ask (with a date in that month).
+    if (!s.amount || !isThisMonth) return setNeedsAmount(s);
     setBusy(s.id);
     try {
       const tx = await api<Transaction>(`/api/income-sources/${s.id}/add`, { method: "POST", json: {} });
@@ -183,10 +187,11 @@ export function QuickIncomeCard() {
               <Text style={{ color: c.foreground, fontSize: 15, fontWeight: "700" }} numberOfLines={1}>{s.name}</Text>
               <Text style={{ color: c.mutedForeground, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
                 {ticked && s.this_month_date
-                  ? `Added ${format(parseDateOnly(s.this_month_date), "d MMM")}`
+                  ? `Added ${format(parseDateOnly(s.this_month_date), "d MMM")}` +
+                    (s.this_month_for_month ? ` · for ${monthLabel(s.this_month_for_month)}` : "")
                   : s.amount
-                    ? `Tap to add for ${monthName}`
-                    : "Tap to enter this month's amount"}
+                    ? `Tap to add ${s.for_previous_month ? `${monthLabel(previousMonthKey(month))}'s` : `for ${monthName}`}`
+                    : `Tap to enter ${monthName}'s amount`}
               </Text>
             </View>
             <Text
@@ -208,25 +213,30 @@ export function QuickIncomeCard() {
         </Text>
       ) : null}
 
-      <QuickAddSheet source={needsAmount} onClose={() => setNeedsAmount(null)} />
+      <QuickAddSheet source={needsAmount} month={month} onClose={() => setNeedsAmount(null)} />
       <IncomeSourceForm visible={editing.open} source={editing.source} onClose={() => setEditing({ open: false })} />
     </View>
   );
 }
 
 /** For a source with no saved amount: enter this month's amount, then record it. */
-function QuickAddSheet({ source, onClose }: { source: IncomeSource | null; onClose: () => void }) {
+function QuickAddSheet({ source, month, onClose }: { source: IncomeSource | null; month: Date; onClose: () => void }) {
   const cur = useUser().currency;
   const [amount, setAmount] = React.useState("");
   const [date, setDate] = React.useState(new Date());
+  const [forMonth, setForMonth] = React.useState<string | null>(null);
   const { saving, errors, setErrors, run } = useSubmit();
 
   React.useEffect(() => {
     if (!source) return;
     setAmount(source.amount ? String(source.amount) : "");
-    setDate(new Date());
+    // Today in the current month; otherwise the 1st of the month being viewed (editable).
+    const now = new Date();
+    const d = monthKey(month) === monthKey(now) ? now : new Date(month.getFullYear(), month.getMonth(), 1);
+    setDate(d);
+    setForMonth(source.for_previous_month ? previousMonthKey(d) : null);
     setErrors({});
-  }, [source, setErrors]);
+  }, [source, month, setErrors]);
 
   const value = Number(amount.replace(/,/g, ""));
   const save = () =>
@@ -235,7 +245,7 @@ function QuickAddSheet({ source, onClose }: { source: IncomeSource | null; onClo
       if (!(value > 0)) return setErrors({ amount: "Enter an amount" });
       const tx = await api<Transaction>(`/api/income-sources/${source.id}/add`, {
         method: "POST",
-        json: { amount: value, date: toISODate(date) },
+        json: { amount: value, date: toISODate(date), for_month: forMonth && forMonth !== monthKey(date) ? forMonth : null },
       });
       invalidate("/api/income-sources", "/api/transactions", "/api/dashboard", "/api/activity", "/api/budgets");
       toast(`Added ${formatMoney(tx.amount, cur)} from ${source.name}`);
@@ -250,7 +260,8 @@ function QuickAddSheet({ source, onClose }: { source: IncomeSource | null; onClo
       footer={<Button title={value > 0 ? `Add ${formatMoney(value, cur)} income` : "Add income"} onPress={save} loading={saving} />}
     >
       <Input label={`Amount (${cur})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0" error={errors.amount} autoFocus={!source?.amount} />
-      <DateField label="Date" value={date} onChange={(d) => d && setDate(d)} />
+      <DateField label="Date received" value={date} onChange={(d) => d && setDate(d)} />
+      <ForMonthField date={date} value={forMonth} onChange={setForMonth} />
     </Sheet>
   );
 }
@@ -264,10 +275,12 @@ function IncomeSourceForm({ visible, source, onClose }: { visible: boolean; sour
   const [amount, setAmount] = React.useState("");
   const [categoryId, setCategoryId] = React.useState<number | null>(null);
   const [method, setMethod] = React.useState("bank");
+  const [previous, setPrevious] = React.useState(false);
   const { saving, errors, setErrors, run } = useSubmit();
 
   React.useEffect(() => {
     if (!visible) return;
+    setPrevious(source?.for_previous_month ?? false);
     setName(source?.name ?? "");
     setAmount(source?.amount ? String(source.amount) : "");
     setCategoryId(source?.category_id ?? null);
@@ -280,7 +293,7 @@ function IncomeSourceForm({ visible, source, onClose }: { visible: boolean; sour
       if (!name.trim()) return setErrors({ name: "Give it a name" });
       const n = amount.trim() ? Number(amount.replace(/,/g, "")) : null;
       if (n !== null && !(n > 0)) return setErrors({ amount: "Enter a valid amount, or leave it empty" });
-      const json = { name: name.trim(), amount: n, category_id: categoryId, payment_method: method };
+      const json = { name: name.trim(), amount: n, category_id: categoryId, payment_method: method, for_previous_month: previous };
       if (source) await api(`/api/income-sources/${source.id}`, { method: "PATCH", json });
       else await api("/api/income-sources", { method: "POST", json });
       invalidate("/api/income-sources");
@@ -319,6 +332,21 @@ function IncomeSourceForm({ visible, source, onClose }: { visible: boolean; sour
       </Field>
       <Field label="Comes in as">
         <Chips options={PAYMENT_METHODS} value={method} onChange={setMethod} />
+      </Field>
+      <Field label="Usually paid for">
+        <Chips
+          options={[
+            { value: "same", label: "The same month" },
+            { value: "previous", label: "The previous month" },
+          ]}
+          value={previous ? "previous" : "same"}
+          onChange={(v) => setPrevious(v === "previous")}
+        />
+        <Text style={{ color: c.mutedForeground, fontSize: 12 }}>
+          {previous
+            ? "E.g. October's salary paid in November: a tap in November is marked as for October."
+            : "Pick \"previous month\" for salary or tuition fees paid after the month ends."}
+        </Text>
       </Field>
       {source ? (
         <Pressable onPress={remove} style={{ flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start" }}>

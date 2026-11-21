@@ -19,6 +19,7 @@ from ..models import (
     Loan,
     Note,
     PrayerLog,
+    SavingsGoal,
     Reminder,
     Task,
     TaskCategory,
@@ -192,6 +193,19 @@ def export_data(user: CurrentUser, db: DB):
             for l in db.scalars(select(Loan).where(Loan.user_id == user.id).order_by(Loan.id))
         ],
         "income_sources": rows(IncomeSource, IncomeSourceOut),
+        "savings": [
+            {
+                "id": g.id,
+                "name": g.name,
+                "target": g.target,
+                "note": g.note,
+                "entries": [
+                    {"kind": e.kind, "amount": e.amount, "date": e.date.isoformat(), "note": e.note}
+                    for e in g.entries
+                ],
+            }
+            for g in db.scalars(select(SavingsGoal).where(SavingsGoal.user_id == user.id).order_by(SavingsGoal.id))
+        ],
         "prayers": [
             {"date": p.date.isoformat(), "prayer": p.prayer, "status": p.status}
             for p in db.scalars(select(PrayerLog).where(PrayerLog.user_id == user.id).order_by(PrayerLog.date))

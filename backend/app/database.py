@@ -56,6 +56,16 @@ def upgrade_schema() -> None:
             )
         if reset_columns and "attempts" not in reset_columns:
             conn.execute(text("ALTER TABLE password_reset_tokens ADD COLUMN attempts INTEGER DEFAULT 0"))
+        if tx_columns and "for_month" not in tx_columns:
+            conn.execute(text("ALTER TABLE transactions ADD COLUMN for_month VARCHAR(7)"))
+        source_columns = {c["name"] for c in insp.get_columns("income_sources")} if "income_sources" in tables else set()
+        if source_columns and "for_previous_month" not in source_columns:
+            conn.execute(text("ALTER TABLE income_sources ADD COLUMN for_previous_month BOOLEAN DEFAULT FALSE"))
+        savings_columns = {c["name"] for c in insp.get_columns("savings_goals")} if "savings_goals" in tables else set()
+        if savings_columns and "completed_on" not in savings_columns:
+            conn.execute(text("ALTER TABLE savings_goals ADD COLUMN completed_on DATE"))
+            conn.execute(text("ALTER TABLE savings_goals ADD COLUMN spent FLOAT"))
+            conn.execute(text("ALTER TABLE savings_goals ADD COLUMN leftover FLOAT"))
 
 
 def get_db() -> Generator[Session, None, None]:

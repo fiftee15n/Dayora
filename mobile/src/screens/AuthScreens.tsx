@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import * as React from "react";
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -60,7 +61,7 @@ function computeSizes(width: number, usableHeight: number) {
   return {
     pad: width < 360 ? 18 : 24,
     topPad: l(4, 16),
-    logo: l(48, 64),
+    logo: l(34, 44),
     title: l(24, 30),
     subtitle: l(13, 15),
     titleGap: l(10, 18),
@@ -86,18 +87,12 @@ function Logo({ onLongPress }: { onLongPress?: () => void }) {
   const z = useSizes();
   return (
     <Pressable onLongPress={onLongPress} delayLongPress={800} hitSlop={8} accessibilityLabel="Dayora">
-      <View
-        style={{
-          width: z.logo,
-          height: z.logo,
-          borderRadius: Math.round(z.logo * 0.3),
-          backgroundColor: M.ink,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Text style={{ color: M.bg, fontSize: Math.round(z.logo * 0.53), fontWeight: "800", marginTop: -2 }}>d</Text>
-      </View>
+      {/* The dayora. wordmark (transparent PNG), sized by height; the image is ~3.46:1. */}
+      <Image
+        source={require("../../assets/wordmark.png")}
+        style={{ width: Math.round(z.logo * 3.46), height: z.logo, tintColor: M.ink }}
+        resizeMode="contain"
+      />
     </Pressable>
   );
 }
@@ -237,15 +232,16 @@ function AuthInput({
   label,
   icon,
   error,
+  invalid,
   password,
   right,
   ...rest
-}: TextInputProps & { label: string; icon?: IconName; error?: string; password?: boolean; right?: React.ReactNode }) {
+}: TextInputProps & { label: string; icon?: IconName; error?: string; invalid?: boolean; password?: boolean; right?: React.ReactNode }) {
   const z = useSizes();
   const [focused, setFocused] = React.useState(false);
   const [show, setShow] = React.useState(false);
   const inputRef = React.useRef<React.ComponentRef<typeof TextInput>>(null);
-  const borderColor = error ? M.error : focused ? M.ink : M.field;
+  const borderColor = error || invalid ? M.error : focused ? M.ink : M.field;
   return (
     <View style={{ gap: z.labelGap }}>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
@@ -327,15 +323,13 @@ function PrimaryButton({ title, onPress, loading, outline }: { title: string; on
   );
 }
 
+/** A whole-form error (e.g. "Couldn't reach the server"): plain red text, no box. */
 function FormError({ message }: { message?: string }) {
   if (!message) return null;
   return (
-    <View
-      style={{ flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: M.ink }}
-    >
-      <Icon name="alert-circle" size={18} color={M.ink} />
-      <Text style={{ flex: 1, color: M.ink, fontSize: 13, lineHeight: 18 }}>{message}</Text>
-    </View>
+    <Text accessibilityRole="alert" style={{ color: M.error, fontSize: 13, lineHeight: 18, fontWeight: "600" }}>
+      {message}
+    </Text>
   );
 }
 
@@ -407,6 +401,13 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<AuthStack, "L
   const [errors, setErrors] = React.useState<Record<string, string>>({});
   const [loading, setLoading] = React.useState(false);
 
+  function edit(setter: (v: string) => void) {
+    return (v: string) => {
+      setter(v);
+      if (errors.form) setErrors({});
+    };
+  }
+
   async function submit() {
     const e: Record<string, string> = {};
     if (!EMAIL_RE.test(email.trim())) e.email = "Enter a valid email";
@@ -434,21 +435,22 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<AuthStack, "L
       <AuthInput
         label="Email Address"
         value={email}
-        onChangeText={setEmail}
+        onChangeText={edit(setEmail)}
         autoCapitalize="none"
         keyboardType="email-address"
         autoComplete="email"
         placeholder="Enter email"
         error={errors.email}
+        invalid={!!errors.form}
         returnKeyType="next"
       />
       <AuthInput
         label="Password"
         password
         value={password}
-        onChangeText={setPassword}
+        onChangeText={edit(setPassword)}
         placeholder="Enter password"
-        error={errors.password}
+        error={errors.password || errors.form}
         autoComplete="password"
         returnKeyType="go"
         onSubmitEditing={submit}
@@ -456,7 +458,6 @@ export function LoginScreen({ navigation }: NativeStackScreenProps<AuthStack, "L
       <Pressable onPress={() => navigation.navigate("Forgot")} hitSlop={8} style={{ alignSelf: "flex-start" }}>
         <Text style={{ color: M.ink, fontSize: 15, fontWeight: "700" }}>Forgot Password?</Text>
       </Pressable>
-      <FormError message={errors.form} />
       <PrimaryButton title="Sign in" onPress={submit} loading={loading} />
       <FooterLink text="Don't have an account?" link="Create account" onPress={() => navigation.navigate("Register")} />
       <OrDivider />

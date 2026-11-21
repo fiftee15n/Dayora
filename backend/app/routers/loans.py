@@ -5,10 +5,10 @@ expense; lending is an expense and being repaid is income. Each LoanEntry is lin
 Transaction it created, so editing or deleting either side keeps the other in step.
 """
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Query, Response
 from sqlalchemy import select
 
 from ..deps import DB, ClockDep, CurrentUser, get_owned, log_activity
@@ -269,6 +269,11 @@ def _this_month_tx(db, src: IncomeSource, today: date) -> Transaction | None:
     )
 
 
+def _previous_month(d: date) -> str:
+    first = d.replace(day=1)
+    return (first - timedelta(days=1)).strftime("%Y-%m")
+
+
 def _source_out(db, src: IncomeSource, today: date) -> IncomeSourceOut:
     out = IncomeSourceOut.model_validate(src)
     tx = _this_month_tx(db, src, today)
@@ -276,15 +281,23 @@ def _source_out(db, src: IncomeSource, today: date) -> IncomeSourceOut:
         out.this_month_transaction_id = tx.id
         out.this_month_amount = tx.amount
         out.this_month_date = tx.date
+        out.this_month_for_month = tx.for_month
     return out
 
 
 @router.get("/income-sources", response_model=list[IncomeSourceOut])
-def list_income_sources(user: CurrentUser, db: DB, clock: ClockDep):
+def list_income_sources(
+    user: CurrentUser,
+    db: DB,
+    clock: ClockDep,
+    month: str | None = Query(default=None, pattern=r"^\d{4}-(0[1-9]|1[0-2])$"),
+):
+    """Sources with their tick for `month` ("2026-02"; default this month)."""
+    on = date(int(month[:4]), int(month[5:]), 1) if month else clock.today
     sources = db.scalars(
         select(IncomeSource).where(IncomeSource.user_id == user.id).order_by(IncomeSource.id)
     ).unique().all()
-    return [_source_out(db, s, clock.today) for s in sources]
+    return [_source_out(db, s, on) for s in sources]
 
 
 @router.post("/income-sources", response_model=IncomeSourceOut, status_code=201)
@@ -337,6 +350,13 @@ def add_income_from_source(source_id: int, data: IncomeSourceAddIn, user: Curren
     on = data.date or clock.today
     if _this_month_tx(db, src, on) is not None:
         raise HTTPException(status_code=409, detail=f"{src.name} is already added for {on.strftime('%B')}.")
+    # A month chosen in the app wins (null = the month received); otherwise the source's default.
+    if "for_month" in data.model_fields_set:
+        for_month = data.for_month
+    else:
+        for_month = _previous_month(on) if src.for_previous_month else None
+    if for_month == on.strftime("%Y-%m"):
+        for_month = None
     tx = Transaction(
         user_id=user.id,
         type="income",
@@ -346,6 +366,7 @@ def add_income_from_source(source_id: int, data: IncomeSourceAddIn, user: Curren
         date=on,
         category_id=src.category_id,
         income_source_id=src.id,
+        for_month=for_month,
     )
     db.add(tx)
     db.flush()

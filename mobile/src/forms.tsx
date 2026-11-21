@@ -9,7 +9,7 @@ import { invalidate, useQuery } from "./query";
 import { useColors } from "./theme";
 import type { Budget, ExpenseCategory, Habit, Reminder, Task, TaskCategory, Transaction, TxType } from "./types";
 import { Button, Chips, DateField, Field, Icon, type IconName, Input, Row, Segmented, Sheet, T, errorMessage, toast } from "./ui";
-import { PAYMENT_METHODS, PRIORITIES, RECURRENCES, SWATCHES, formatMoney, parseDateOnly, toISODate } from "./utils";
+import { PAYMENT_METHODS, PRIORITIES, RECURRENCES, SWATCHES, formatMoney, parseDateOnly, toISODate, monthKey, monthLabel } from "./utils";
 
 type Errors = Record<string, string>;
 
@@ -97,7 +97,7 @@ export function TaskForm({ visible, onClose, task, defaultDue }: { visible: bool
 }
 
 const TASK_CATEGORY_SUGGESTIONS = ["Fitness", "Shopping", "Finance", "Family", "Errands", "Home", "Learning"];
-const EXPENSE_CATEGORY_SUGGESTIONS = ["Marathon", "Fitness", "Travel", "Rent", "Subscriptions", "Gifts", "Charity"];
+const EXPENSE_CATEGORY_SUGGESTIONS = ["Restaurant", "Marathon", "Fitness", "Travel", "Rent", "Subscriptions", "Gifts", "Charity"];
 const INCOME_CATEGORY_SUGGESTIONS = ["Business", "Bonus", "Rental income", "Interest", "Refund"];
 const CATEGORY_COLORS = ["#F97316", "#0EA5E9", "#10B981", "#EC4899", "#8B5CF6", "#EAB308", "#64748B"];
 
@@ -187,6 +187,30 @@ function NewCategory<C extends { id: number; name: string }>({
 }
 
 // ---------------- Transaction ----------------
+/** Which month an income is for. Default: the month it was received (`value` null). */
+export function ForMonthField({ date, value, onChange }: { date: Date; value: string | null; onChange: (v: string | null) => void }) {
+  const received = monthKey(date);
+  const options: { value: string | null; label: string }[] = [{ value: null, label: `${monthLabel(received, date)} (received)` }];
+  for (let i = 1; i <= 12; i++) {
+    const k = monthKey(new Date(date.getFullYear(), date.getMonth() - i, 1));
+    options.push({ value: k, label: monthLabel(k, date) });
+  }
+  const next = monthKey(new Date(date.getFullYear(), date.getMonth() + 1, 1));
+  options.push({ value: next, label: `${monthLabel(next, date)} (advance)` });
+  // A month further back that isn't in the list (editing an old entry) stays selectable.
+  if (value && !options.some((o) => o.value === value)) options.splice(1, 0, { value, label: monthLabel(value, date) });
+  return (
+    <Field label="For month">
+      <Chips options={options} value={value === received ? null : value} onChange={onChange} />
+      <T variant="caption" muted>
+        {value && value !== received
+          ? `Counts in ${monthLabel(received, date)}'s income (when you received it). ${monthLabel(value, date)} shows it as received later.`
+          : "E.g. October's salary paid in November: pick October."}
+      </T>
+    </Field>
+  );
+}
+
 export function TransactionForm({ visible, onClose, transaction, defaultType = "expense" }: { visible: boolean; onClose: () => void; transaction?: Transaction | null; defaultType?: TxType }) {
   const user = useUser();
   const c = useColors();
@@ -197,10 +221,12 @@ export function TransactionForm({ visible, onClose, transaction, defaultType = "
   const [method, setMethod] = React.useState("cash");
   const [date, setDate] = React.useState<Date>(new Date());
   const [categoryId, setCategoryId] = React.useState<number | null>(null);
+  const [forMonth, setForMonth] = React.useState<string | null>(null);
   const { saving, errors, setErrors, run } = useSubmit();
 
   React.useEffect(() => {
     if (!visible) return;
+    setForMonth(transaction?.for_month ?? null);
     setType(transaction?.type ?? defaultType);
     setAmount(transaction ? String(transaction.amount) : "");
     setDescription(transaction?.description ?? "");
@@ -214,10 +240,18 @@ export function TransactionForm({ visible, onClose, transaction, defaultType = "
     run(async () => {
       const value = Number(amount.replace(/,/g, ""));
       if (!value || value <= 0) return setErrors({ amount: "Enter an amount greater than 0" });
-      const json = { type, amount: value, description: description.trim() || null, payment_method: method, date: toISODate(date), category_id: categoryId };
+      const json = {
+        type,
+        amount: value,
+        description: description.trim() || null,
+        payment_method: method,
+        date: toISODate(date),
+        category_id: categoryId,
+        for_month: type === "income" && forMonth !== monthKey(date) ? forMonth : null,
+      };
       if (transaction) await api(`/api/transactions/${transaction.id}`, { method: "PATCH", json });
       else await api("/api/transactions", { method: "POST", json });
-      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity", "/api/reports", "/api/income-sources", "/api/loans");
+      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity", "/api/reports", "/api/income-sources", "/api/loans", "/api/savings");
       toast(transaction ? "Transaction updated" : type === "income" ? "Income recorded" : "Expense recorded");
       onClose();
     });
@@ -269,7 +303,8 @@ export function TransactionForm({ visible, onClose, transaction, defaultType = "
           onCreated={(cat) => setCategoryId(cat.id)}
         />
       </Field>
-      <DateField label="Date" value={date} onChange={(d) => d && setDate(d)} />
+      <DateField label={type === "income" ? "Date received" : "Date"} value={date} onChange={(d) => d && setDate(d)} />
+      {type === "income" ? <ForMonthField date={date} value={forMonth} onChange={setForMonth} /> : null}
       <Field label="Payment method">
         <Chips options={PAYMENT_METHODS} value={method} onChange={setMethod} />
       </Field>

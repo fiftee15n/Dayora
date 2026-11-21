@@ -110,3 +110,19 @@ export function alpha(hex: string, a: number) {
     .padStart(2, "0");
   return /^#[0-9a-f]{6}$/i.test(hex) ? `${hex}${v}` : hex;
 }
+
+/** "2026-10" for a date. */
+export function monthKey(d: Date): string {
+  return format(d, "yyyy-MM");
+}
+
+/** "2026-10" -> "October" (or "October 2025" when the year differs from `ref`'s / this year). */
+export function monthLabel(key: string, ref: Date = new Date()): string {
+  const [y, m] = key.split("-").map(Number);
+  return format(new Date(y, m - 1, 1), y === ref.getFullYear() ? "MMMM" : "MMMM yyyy");
+}
+
+/** The month before `d`, as "2026-10". */
+export function previousMonthKey(d: Date): string {
+  return monthKey(new Date(d.getFullYear(), d.getMonth() - 1, 1));
+}

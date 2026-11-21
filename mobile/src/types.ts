@@ -56,6 +56,8 @@ export interface Transaction {
   category_id: number | null;
   category: ExpenseCategory | null;
   created_at: string;
+  /** Income only: the month it was for ("2026-10"), when not the month received. */
+  for_month: string | null;
 }
 
 export interface Budget {
@@ -78,6 +80,11 @@ export interface FinanceSummary {
   top_category: { name: string; total: number; percent: number; color: string } | null;
   daily: { date: string; income: number; expense: number }[];
   by_payment_method: Record<string, number>;
+  /** Income received in this period that was for another month. */
+  income_for_other_months: { month: string; amount: number }[];
+  /** Income for a month in this period that was received in another month (not in these totals). */
+  received_elsewhere: Transaction[];
+  received_elsewhere_total: number;
 }
 
 export interface Habit {
@@ -244,8 +251,47 @@ export interface IncomeSource {
   category_id: number | null;
   category: ExpenseCategory | null;
   payment_method: string;
+  /** Paid in arrears (salary, tuition): one-tap adds are for the previous month. */
+  for_previous_month: boolean;
   /** This month's income from this source, if already added (the tick). */
   this_month_transaction_id: number | null;
   this_month_amount: number | null;
   this_month_date: string | null;
+  this_month_for_month: string | null;
+}
+
+export interface SavingsEntry {
+  id: number;
+  kind: "deposit" | "withdraw";
+  amount: number;
+  date: string;
+  note: string | null;
+  transaction_id: number | null;
+}
+
+export interface SavingsGoal {
+  id: number;
+  name: string;
+  target: number | null;
+  note: string | null;
+  created_at: string;
+  saved: number;
+  remaining: number | null;
+  progress: number | null;
+  reached: boolean;
+  this_month: number;
+  last_date: string | null;
+  entries_count: number;
+  completed_on: string | null;
+  spent: number | null;
+  leftover: number | null; // returned to the balance; negative = spent more than saved
+}
+
+export interface SavingsGoalDetail extends SavingsGoal {
+  entries: SavingsEntry[];
+}
+
+export interface SavingsList {
+  items: SavingsGoal[];
+  totals: { saved: number; target: number; this_month: number };
 }

@@ -2,7 +2,7 @@ import { useNavigation } from "@react-navigation/native";
 import { format } from "date-fns/format";
 import * as ImagePicker from "expo-image-picker";
 import * as React from "react";
-import { AppState, Linking, Pressable, ScrollView, Share, Switch, Text, View } from "react-native";
+import { AppState, Image, Linking, Pressable, ScrollView, Share, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { api, ApiError, setToken } from "../api";
@@ -192,7 +192,13 @@ export function SettingsScreen() {
           <Glyph name="trash" size={16} color={c.danger} weight="bold" />
           <Text style={{ color: c.danger, fontSize: 14, fontWeight: "700" }}>Delete account</Text>
         </Pressable>
-        <Text style={{ color: c.mutedForeground, fontSize: 12, textAlign: "center", marginTop: 24 }}>Dayora · Make every day count</Text>
+        <Image
+          source={require("../../assets/wordmark.png")}
+          style={{ width: 96, height: 28, alignSelf: "center", marginTop: 28, tintColor: c.mutedForeground }}
+          resizeMode="contain"
+          accessibilityLabel="Dayora"
+        />
+        <Text style={{ color: c.mutedForeground, fontSize: 12, textAlign: "center", marginTop: 6 }}>Make every day count</Text>
       </ScrollView>
 
       <ProfileSheet visible={sheet === "profile"} onClose={() => setSheet(null)} />

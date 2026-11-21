@@ -25,6 +25,8 @@ import { BlurTargetLayout, BlurTargetsProvider, GlassTabBar } from "./src/GlassT
 import { type GlyphName } from "./src/icons";
 import { LoanDetailScreen, type LoanParams, LoansScreen, type LoansParams } from "./src/screens/LoansScreens";
 import { NamazScreen } from "./src/screens/NamazScreen";
+import { SavingsGoalScreen, type SavingsGoalParams } from "./src/screens/SavingsScreens";
+import { MonthlyReportScreen, type MonthlyReportParams } from "./src/screens/MonthlyReportScreen";
 
 type RootStack = AuthStack & {
   Tabs: undefined;
@@ -34,6 +36,8 @@ type RootStack = AuthStack & {
   Settings: undefined;
   Loans: LoansParams;
   Loan: LoanParams;
+  SavingsGoal: SavingsGoalParams;
+  MonthlyReport: MonthlyReportParams;
 };
 
 const Stack = createNativeStackNavigator<RootStack>();
@@ -112,6 +116,8 @@ function Root() {
             <Stack.Screen name="History" component={HistoryScreen} />
             <Stack.Screen name="Loans" component={LoansScreen} />
             <Stack.Screen name="Loan" component={LoanDetailScreen} />
+            <Stack.Screen name="SavingsGoal" component={SavingsGoalScreen} />
+            <Stack.Screen name="MonthlyReport" component={MonthlyReportScreen} />
             <Stack.Screen name="Settings" component={SettingsScreen} />
           </>
         ) : (

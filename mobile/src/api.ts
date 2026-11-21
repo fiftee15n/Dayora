@@ -4,8 +4,11 @@ import * as SecureStore from "expo-secure-store";
 const TOKEN_KEY = "dayora_token";
 const SERVER_KEY = "dayora_server";
 
+const extra = (Constants.expoConfig?.extra ?? {}) as { defaultApiUrl?: string; devApiUrl?: string };
+
+/** Debug builds (development, __DEV__) use the backend on your PC; release builds the hosted API. */
 export const DEFAULT_SERVER: string =
-  (Constants.expoConfig?.extra?.defaultApiUrl as string | undefined) ?? "http://10.0.2.2:8000";
+  (__DEV__ && extra.devApiUrl) || extra.defaultApiUrl || "http://10.0.2.2:8000";
 
 let token: string | null = null;
 let server = DEFAULT_SERVER;
@@ -27,9 +30,10 @@ export async function loadSession() {
     SecureStore.getItemAsync(SERVER_KEY),
   ]);
   token = t;
-  // A saved local-network address (from testing against a PC) is replaced by the hosted API.
+  // In a release build, a saved local-network address (from testing against a PC) is replaced
+  // by the hosted API. Debug builds keep it: they're meant to talk to the PC.
   const local = s && /^http:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(s);
-  if (s && !(local && DEFAULT_SERVER.startsWith("https://"))) server = s;
+  if (s && !(local && !__DEV__ && DEFAULT_SERVER.startsWith("https://"))) server = s;
   else if (s) await SecureStore.deleteItemAsync(SERVER_KEY);
   return { token, server };
 }
