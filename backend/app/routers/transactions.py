@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query
 from sqlalchemy import func, select
 
 from ..deps import DB, ClockDep, CurrentUser, get_owned, log_activity
-from ..models import Budget, ExpenseCategory, Loan, LoanEntry, Transaction
+from ..models import Budget, ExpenseCategory, Loan, LoanEntry, SavingsEntry, Transaction
 from ..schemas import (
     BudgetIn,
     BudgetOut,
@@ -67,10 +67,17 @@ def list_transactions(
     return Page[TransactionOut](items=items, total=total, page=page, page_size=page_size)
 
 
+def _fix_for_month(tx: Transaction) -> None:
+    """for_month is for income only, and only when it differs from the month received."""
+    if tx.type != "income" or tx.for_month == tx.date.strftime("%Y-%m"):
+        tx.for_month = None
+
+
 @router.post("/transactions", response_model=TransactionOut, status_code=201)
 def create_transaction(data: TransactionIn, user: CurrentUser, db: DB):
     _check_category(db, user, data.category_id)
     tx = Transaction(user_id=user.id, **data.model_dump())
+    _fix_for_month(tx)
     db.add(tx)
     db.flush()
     label = tx.description or tx.type.title()
@@ -86,17 +93,22 @@ def create_transaction(data: TransactionIn, user: CurrentUser, db: DB):
 def update_transaction(tx_id: int, data: TransactionUpdate, user: CurrentUser, db: DB):
     tx = get_owned(db, Transaction, tx_id, user)
     changes = data.model_dump(exclude_unset=True)
-    entry = db.scalar(select(LoanEntry).where(LoanEntry.transaction_id == tx.id))
+    # A loan or savings entry recorded through this transaction stays in step with it.
+    entry = db.scalar(select(LoanEntry).where(LoanEntry.transaction_id == tx.id)) or db.scalar(
+        select(SavingsEntry).where(SavingsEntry.transaction_id == tx.id)
+    )
     if entry is not None and changes.get("type") not in (None, tx.type):
-        raise HTTPException(status_code=400, detail="This is part of a loan, so it can't switch between income and expense.")
+        what = "a loan" if isinstance(entry, LoanEntry) else "a savings goal"
+        raise HTTPException(status_code=400, detail=f"This is part of {what}, so it can't switch between income and expense.")
     if "category_id" in changes:
         _check_category(db, user, changes["category_id"])
     for key, value in changes.items():
         if value is None and key in {"type", "amount", "date", "payment_method"}:
             continue
         setattr(tx, key, value)
+    _fix_for_month(tx)
     if entry is not None:
-        # Keep the loan in step with its Money record.
+        # Keep the loan / savings goal in step with its Money record.
         entry.amount = tx.amount
         entry.date = tx.date
     log_activity(db, user, "updated", "transaction", f"Updated {tx.type} {_money(tx.amount)}", tx.id)
@@ -117,6 +129,10 @@ def delete_transaction(tx_id: int, user: CurrentUser, db: DB):
         loan.entries.remove(entry)
         if not loan.entries:
             db.delete(loan)
+    # Same for savings: the money goes back to the balance and leaves the goal.
+    saving = db.scalar(select(SavingsEntry).where(SavingsEntry.transaction_id == tx.id))
+    if saving is not None:
+        db.delete(saving)
     db.delete(tx)
     db.commit()
 
@@ -180,6 +196,28 @@ def transactions_summary(
         if t.type == "expense":
             payment[t.payment_method] = round(payment.get(t.payment_method, 0) + t.amount, 2)
 
+    # Income received in this period but earned for another month ("৳50,000 of it is for October").
+    other: dict[str, float] = {}
+    for t in rows:
+        if t.type == "income" and t.for_month:
+            other[t.for_month] = round(other.get(t.for_month, 0) + t.amount, 2)
+    income_for_other_months = [{"month": m, "amount": a} for m, a in sorted(other.items())]
+
+    # Income earned for a month in this period but received in another one (October shows
+    # "October's salary, received 15 Nov"). Shown for information; it isn't in these totals.
+    months = sorted({start.strftime("%Y-%m"), end.strftime("%Y-%m")} | {d.strftime("%Y-%m") for d in days})
+    elsewhere = db.scalars(
+        select(Transaction)
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.type == "income",
+            Transaction.for_month.in_(months),
+            (Transaction.date < start) | (Transaction.date > end),
+        )
+        .order_by(Transaction.date, Transaction.id)
+    ).unique().all()
+    received_elsewhere = [TransactionOut.model_validate(t).model_dump(mode="json") for t in elsewhere]
+
     return {
         "start": start.isoformat(),
         "end": end.isoformat(),
@@ -191,6 +229,9 @@ def transactions_summary(
         "top_category": categories[0] if categories else None,
         "daily": daily,
         "by_payment_method": payment,
+        "income_for_other_months": income_for_other_months,
+        "received_elsewhere": received_elsewhere,
+        "received_elsewhere_total": round(sum(t.amount for t in elsewhere), 2),
     }
 
 

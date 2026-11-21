@@ -47,6 +47,7 @@ DEFAULT_TASK_CATEGORIES = [
 ]
 DEFAULT_EXPENSE_CATEGORIES = [
     ("Food & Groceries", "#F59E0B", "utensils"),
+    ("Restaurant", "#F97316", "utensils"),
     ("Transportation", "#0EA5E9", "car"),
     ("Shopping", "#EC4899", "shopping-bag"),
     ("Education", "#6366F1", "graduation-cap"),

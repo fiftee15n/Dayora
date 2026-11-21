@@ -195,6 +195,9 @@ class TaskOut(ORM):
 
 
 # ---------- Transactions & Budgets ----------
+MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
+
+
 class TransactionIn(BaseModel):
     type: TxType
     amount: float = Field(gt=0, le=1_000_000_000)
@@ -202,6 +205,8 @@ class TransactionIn(BaseModel):
     payment_method: str = Field(default="cash", max_length=30)
     date: Date
     category_id: int | None = None
+    # Income only: the month it was for ("2026-10"), if not the month received.
+    for_month: str | None = Field(default=None, pattern=MONTH_PATTERN)
 
 
 class TransactionUpdate(BaseModel):
@@ -211,6 +216,7 @@ class TransactionUpdate(BaseModel):
     payment_method: str | None = Field(default=None, max_length=30)
     date: Date | None = None
     category_id: int | None = None
+    for_month: str | None = Field(default=None, pattern=MONTH_PATTERN)
 
 
 LoanDirection = Literal["borrowed", "lent"]
@@ -283,11 +289,83 @@ class LoanListOut(BaseModel):
     totals: LoanTotals
 
 
+class SavingsGoalIn(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    target: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class SavingsGoalUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=80)
+    target: float | None = Field(default=None, gt=0, le=1_000_000_000)
+    note: str | None = Field(default=None, max_length=500)
+
+
+class SavingsEntryIn(BaseModel):
+    kind: Literal["deposit", "withdraw"] = "deposit"
+    amount: float = Field(gt=0, le=1_000_000_000)
+    date: Date
+    note: str | None = Field(default=None, max_length=255)
+    # Deposits count as an expense this month (they leave your balance); withdrawals as income.
+    record_in_money: bool = True
+    payment_method: str = Field(default="cash", max_length=30)
+
+
+class SavingsCompleteIn(BaseModel):
+    spent: float = Field(ge=0, le=1_000_000_000)  # what was actually spent on the goal
+    date: Date
+    record_in_money: bool = True
+    payment_method: str = Field(default="cash", max_length=30)
+
+
+class SavingsEntryOut(ORM):
+    id: int
+    kind: str
+    amount: float
+    date: Date
+    note: str | None
+    transaction_id: int | None
+
+
+class SavingsGoalOut(BaseModel):
+    id: int
+    name: str
+    target: float | None
+    note: str | None
+    created_at: UTCDateTime
+    saved: float  # deposits - withdrawals
+    remaining: float | None  # to reach the target
+    progress: float | None  # 0..100
+    reached: bool
+    this_month: float  # net saved this month
+    last_date: Date | None
+    entries_count: int
+    completed_on: Date | None = None
+    spent: float | None = None
+    leftover: float | None = None
+
+
+class SavingsGoalDetailOut(SavingsGoalOut):
+    entries: list[SavingsEntryOut]
+
+
+class SavingsTotals(BaseModel):
+    saved: float  # across all goals
+    target: float  # sum of targets
+    this_month: float  # net put aside this month
+
+
+class SavingsListOut(BaseModel):
+    items: list[SavingsGoalOut]
+    totals: SavingsTotals
+
+
 class IncomeSourceIn(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     amount: float | None = Field(default=None, gt=0, le=1_000_000_000)
     category_id: int | None = None
     payment_method: str = Field(default="bank", max_length=30)
+    for_previous_month: bool = False
 
 
 class IncomeSourceUpdate(BaseModel):
@@ -295,6 +373,7 @@ class IncomeSourceUpdate(BaseModel):
     amount: float | None = Field(default=None, gt=0, le=1_000_000_000)
     category_id: int | None = None
     payment_method: str | None = Field(default=None, max_length=30)
+    for_previous_month: bool | None = None
 
 
 class IncomeSourceOut(ORM):
@@ -304,10 +383,12 @@ class IncomeSourceOut(ORM):
     category_id: int | None
     category: ExpenseCategoryOut | None
     payment_method: str
+    for_previous_month: bool = False
     # This month's entry from this source, if it has been added (the tick in Quick income).
     this_month_transaction_id: int | None = None
     this_month_amount: float | None = None
     this_month_date: Date | None = None
+    this_month_for_month: str | None = None
 
 
 class IncomeSourceAddIn(BaseModel):
@@ -315,6 +396,7 @@ class IncomeSourceAddIn(BaseModel):
 
     amount: float | None = Field(default=None, gt=0, le=1_000_000_000)
     date: Date | None = None
+    for_month: str | None = Field(default=None, pattern=MONTH_PATTERN)
 
 
 class TransactionOut(ORM):
@@ -327,6 +409,7 @@ class TransactionOut(ORM):
     category_id: int | None
     category: ExpenseCategoryOut | None
     created_at: UTCDateTime
+    for_month: str | None = None
 
 
 class BudgetIn(BaseModel):

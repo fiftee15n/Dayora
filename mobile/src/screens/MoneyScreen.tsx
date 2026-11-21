@@ -10,6 +10,9 @@ import { useUser } from "../auth";
 import { BarChart, Donut } from "../charts";
 import { BudgetForm, TransactionForm } from "../forms";
 import { LoansSummaryCard, QuickIncomeCard } from "./MoneyExtras";
+import { SavingsCard } from "./SavingsScreens";
+import { useReportReady } from "./MonthlyReportScreen";
+import { useNavigation } from "@react-navigation/native";
 import { invalidate, useQuery } from "../query";
 import { useColors } from "../theme";
 import type { Budget, FinanceSummary, Page, Transaction, TxType } from "../types";
@@ -36,10 +39,12 @@ import {
   errorMessage,
   toast,
 } from "../ui";
-import { PAYMENT_METHODS, formatMoney, friendlyDay, parseDateOnly, toISODate } from "../utils";
+import { PAYMENT_METHODS, formatMoney, friendlyDay, monthLabel, parseDateOnly, toISODate } from "../utils";
 
 export function MoneyScreen() {
   const c = useColors();
+  const nav = useNavigation<any>();
+  const [readyMonth, dismissReport] = useReportReady();
   const user = useUser();
   const cur = user.currency;
   const [month, setMonth] = React.useState(() => startOfMonth(new Date()));
@@ -84,7 +89,7 @@ export function MoneyScreen() {
     try {
       await api(`/api/transactions/${tx.id}`, { method: "DELETE" });
       setItems((prev) => prev.filter((p) => p.id !== tx.id));
-      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity", "/api/income-sources", "/api/loans");
+      invalidate("/api/transactions", "/api/budgets", "/api/dashboard", "/api/activity", "/api/income-sources", "/api/loans", "/api/savings");
     } catch (e) {
       toast(errorMessage(e));
     }
@@ -109,6 +114,35 @@ export function MoneyScreen() {
       <Screen title="Money" subtitle="Income, spending & budgets" refreshing={summary.refreshing || txs.refreshing} onRefresh={refresh}>
         <MonthPicker value={month} onChange={setMonth} />
 
+        {readyMonth ? (
+          <Pressable
+            onPress={() => {
+              dismissReport();
+              nav.navigate("MonthlyReport", { month: readyMonth });
+            }}
+            style={({ pressed }) => ({
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              padding: 16,
+              borderRadius: 22,
+              backgroundColor: c.foreground,
+              opacity: pressed ? 0.9 : 1,
+            })}
+          >
+            <Icon name="file-text" size={22} color={c.background} />
+            <View style={{ flex: 1 }}>
+              <T weight="800" color={c.background}>Your {monthLabel(readyMonth)} report is ready</T>
+              <T variant="caption" color={c.background} style={{ opacity: 0.7 }}>
+                Income, expenses, daily average, loans and savings
+              </T>
+            </View>
+            <Pressable onPress={dismissReport} hitSlop={10} accessibilityLabel="Dismiss">
+              <Icon name="x" size={18} color={c.background} />
+            </Pressable>
+          </Pressable>
+        ) : null}
+
         {summary.error && !s ? <ErrorBox error={summary.error} onRetry={refresh} /> : null}
         {summary.loading ? <Loading /> : null}
 
@@ -119,9 +153,45 @@ export function MoneyScreen() {
               <SumTile label="Expenses" value={formatMoney(s.expense, cur, true)} color={c.danger} icon="arrow-up-right" />
               <SumTile label="Balance" value={formatMoney(s.balance, cur, true)} color={s.balance >= 0 ? c.primary : c.danger} icon="pie-chart" />
             </Row>
+            {s.income_for_other_months.length ? (
+              <Row gap={8} style={{ paddingHorizontal: 4, marginTop: -4 }}>
+                <Icon name="info" size={14} color={c.mutedForeground} />
+                <T variant="caption" muted style={{ flex: 1 }}>
+                  Income includes{" "}
+                  {s.income_for_other_months.map((o) => `${formatMoney(o.amount, cur)} for ${monthLabel(o.month, month)}`).join(", ")}
+                </T>
+              </Row>
+            ) : null}
+            {s.received_elsewhere.length ? (
+              <Card style={{ gap: 10 }}>
+                <CardHeader title={`For ${format(month, "MMMM")}, received in another month`} />
+                {s.received_elsewhere.map((tx) => (
+                  <Row key={tx.id} gap={12}>
+                    <IconTile name="clock" color={tx.category?.color ?? c.success} size={34} />
+                    <View style={{ flex: 1 }}>
+                      <T weight="600" numberOfLines={1}>{tx.description || tx.category?.name || "Income"}</T>
+                      <T variant="caption" muted>
+                        {monthLabel(tx.for_month ?? "", month)}'s · received {format(parseDateOnly(tx.date), "d MMM yyyy")}
+                      </T>
+                    </View>
+                    <T weight="700" color={c.mutedForeground}>+{formatMoney(tx.amount, cur)}</T>
+                  </Row>
+                ))}
+                <T variant="caption" muted>
+                  Not in {format(month, "MMMM")}'s totals: it counts in the month you received it.
+                </T>
+              </Card>
+            ) : null}
 
-            <QuickIncomeCard />
+            <Button
+              title={`${format(month, "MMMM")} report${isCurrent ? " (so far)" : ""}`}
+              variant="outline"
+              icon="bar-chart-2"
+              onPress={() => nav.navigate("MonthlyReport", { month: monthKey })}
+            />
+            <QuickIncomeCard month={month} />
             <LoansSummaryCard />
+            <SavingsCard balance={s.balance} />
 
             <Card style={{ gap: 14 }}>
               <CardHeader title="Spending by category" />
@@ -228,6 +298,11 @@ export function MoneyScreen() {
                     {tx.category && tx.description ? <Badge label={tx.category.name} color={tx.category.color} /> : null}
                     <T variant="caption" muted>· {PAYMENT_METHODS.find((p) => p.value === tx.payment_method)?.label ?? tx.payment_method}</T>
                   </Row>
+                  {tx.for_month ? (
+                    <T variant="caption" weight="600" color={c.success}>
+                      For {monthLabel(tx.for_month, parseDateOnly(tx.date))}
+                    </T>
+                  ) : null}
                 </View>
                 <T weight="700" color={tx.type === "income" ? c.success : c.foreground}>
                   {tx.type === "income" ? "+" : "−"}

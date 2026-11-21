@@ -42,3 +42,4 @@ yarn-error.*
 
 # Release signing key and its passwords: never commit
 credentials/
+credentials.json

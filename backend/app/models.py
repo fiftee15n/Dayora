@@ -139,6 +139,10 @@ class Transaction(TimestampMixin, Base):
     income_source_id: Mapped[int | None] = mapped_column(
         ForeignKey("income_sources.id", ondelete="SET NULL"), index=True
     )
+    # Income only: the month it was earned for ("2026-10"), when that differs from the month it
+    # was received (e.g. October's salary paid on 15 November). It still counts in the month
+    # received; the earlier month just shows it as "received later".
+    for_month: Mapped[str | None] = mapped_column(String(7))
 
     category: Mapped[ExpenseCategory | None] = relationship(lazy="joined")
 
@@ -186,6 +190,50 @@ class LoanEntry(Base):
     loan: Mapped[Loan] = relationship(back_populates="entries")
 
 
+class SavingsGoal(TimestampMixin, Base):
+    """Money put aside for a purpose (e.g. "New laptop"), with an approximate target."""
+
+    __tablename__ = "savings_goals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    target: Mapped[float | None] = mapped_column(Float)
+    note: Mapped[str | None] = mapped_column(String(500))
+    # Set when the goal is completed: what was actually spent on it, and what was left over
+    # (returned to the balance; negative = paid more than was saved).
+    completed_on: Mapped[date | None] = mapped_column(Date)
+    spent: Mapped[float | None] = mapped_column(Float)
+    leftover: Mapped[float | None] = mapped_column(Float)
+
+    entries: Mapped[list["SavingsEntry"]] = relationship(
+        back_populates="goal",
+        cascade="all, delete-orphan",
+        order_by=lambda: (SavingsEntry.date.desc(), SavingsEntry.id.desc()),
+        lazy="selectin",
+    )
+
+
+class SavingsEntry(Base):
+    """Money put into ("deposit") or taken out of ("withdraw") a savings goal."""
+
+    __tablename__ = "savings_entries"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    goal_id: Mapped[int] = mapped_column(ForeignKey("savings_goals.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(10))  # deposit | withdraw
+    amount: Mapped[float] = mapped_column(Float)
+    date: Mapped[date] = mapped_column(Date)
+    note: Mapped[str | None] = mapped_column(String(255))
+    # The matching expense (deposit) / income (withdraw) in Money, kept in sync both ways.
+    transaction_id: Mapped[int | None] = mapped_column(
+        ForeignKey("transactions.id", ondelete="CASCADE"), index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    goal: Mapped[SavingsGoal] = relationship(back_populates="entries")
+
+
 class IncomeSource(Base):
     """A saved income source (e.g. "Office salary") for one-tap income entries."""
 
@@ -197,6 +245,8 @@ class IncomeSource(Base):
     amount: Mapped[float | None] = mapped_column(Float)
     category_id: Mapped[int | None] = mapped_column(ForeignKey("expense_categories.id", ondelete="SET NULL"))
     payment_method: Mapped[str] = mapped_column(String(30), default="bank")
+    # Paid in arrears (salary, tuition): a one-tap add is marked as for the previous month.
+    for_previous_month: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     category: Mapped[ExpenseCategory | None] = relationship(lazy="joined")
