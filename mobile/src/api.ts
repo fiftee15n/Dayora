@@ -30,10 +30,9 @@ export async function loadSession() {
     SecureStore.getItemAsync(SERVER_KEY),
   ]);
   token = t;
-  // In a release build, a saved local-network address (from testing against a PC) is replaced
-  // by the hosted API. Debug builds keep it: they're meant to talk to the PC.
-  const local = s && /^http:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/i.test(s);
-  if (s && !(local && !__DEV__ && DEFAULT_SERVER.startsWith("https://"))) server = s;
+  // Release builds always use the hosted API, on any network: a saved address is ignored and
+  // removed. Only debug builds can be pointed at another server.
+  if (s && __DEV__) server = s;
   else if (s) await SecureStore.deleteItemAsync(SERVER_KEY);
   return { token, server };
 }
@@ -51,6 +50,7 @@ export function normalizeServer(url: string) {
 }
 
 export async function setServer(url: string) {
+  if (!__DEV__) return;
   server = normalizeServer(url) || DEFAULT_SERVER;
   await SecureStore.setItemAsync(SERVER_KEY, server);
 }
@@ -83,7 +83,7 @@ export async function api<T = unknown>(path: string, init: Init = {}): Promise<T
   }
 
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), init.timeoutMs ?? 15000);
+  const timer = setTimeout(() => ctrl.abort(), init.timeoutMs ?? 30000);
   let res: Response;
   try {
     res = await fetch(`${server}${path}`, {
@@ -95,7 +95,9 @@ export async function api<T = unknown>(path: string, init: Init = {}): Promise<T
   } catch {
     throw new ApiError(
       0,
-      `Can't reach the server at ${server}. Check that the API is running and the phone is on the same network.`,
+      __DEV__
+        ? `Can't reach the server at ${server}. Check that the API is running and the phone is on the same network.`
+        : "Can't reach Dayora. Check your internet connection and try again.",
     );
   } finally {
     clearTimeout(timer);

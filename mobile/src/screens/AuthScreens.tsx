@@ -129,8 +129,8 @@ function AuthLayout({
           {/* Centred column, capped in width so it also looks right on tablets and in landscape. */}
           <View style={{ flexGrow: 1, width: "100%", maxWidth: 440, alignSelf: "center", justifyContent: "center" }}>
             <View style={{ alignItems: "center", marginBottom: z.headerBottom }}>
-              {/* Long-press the logo to change the API server (hidden; for testing). */}
-              <Logo onLongPress={() => setServerOpen(true)} />
+              {/* Debug builds only: long-press the logo to change the API server. */}
+              <Logo onLongPress={__DEV__ ? () => setServerOpen(true) : undefined} />
               <Text
                 style={{ color: M.ink, fontSize: z.title, fontWeight: "800", letterSpacing: -0.5, marginTop: z.titleGap, textAlign: "center" }}
                 numberOfLines={1}
@@ -154,7 +154,7 @@ function AuthLayout({
             <Icon name="chevron-left" size={28} color={M.ink} />
           </Pressable>
         ) : null}
-        <ServerSheet visible={serverOpen} onClose={() => setServerOpen(false)} />
+        {__DEV__ ? <ServerSheet visible={serverOpen} onClose={() => setServerOpen(false)} /> : null}
       </KeyboardAvoidingView>
     </SizesContext.Provider>
   );
@@ -345,7 +345,7 @@ function FooterLink({ text, link, onPress }: { text: string; link: string; onPre
   );
 }
 
-/** Hidden server switch (long-press the logo). Kept so a tester can point the app at another PC. */
+/** Hidden server switch (long-press the logo), debug builds only, to point the app at another PC. */
 function ServerSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [url, setUrl] = React.useState(getServer());
   const [state, setState] = React.useState<"idle" | "testing" | "ok" | "fail">("idle");
