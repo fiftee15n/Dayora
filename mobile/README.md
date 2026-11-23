@@ -17,10 +17,24 @@ cd backend
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-then press and hold the logo on the sign-in screen and enter `http://<your-pc-ip>:8000`
-(Android emulator: `http://10.0.2.2:8000`). Windows Firewall must allow inbound TCP 8000.
-A saved local address is replaced by the hosted API automatically on the next launch of a
-build whose default is `https://`.
+Debug builds use `expo.extra.devApiUrl` (this PC's Wi-Fi address) automatically; hold the logo
+on the sign-in screen to use another address. Windows Firewall must allow inbound TCP 8000.
+Release builds always use the hosted API and can't be pointed elsewhere.
+
+## Building APKs
+
+Run in Git Bash. The script checks the APK and copies it to `D:/Dayora-builds`:
+
+```bash
+scripts/build-apk.sh debug     # "Dayora Dev": the backend on this PC, same Wi-Fi
+scripts/build-apk.sh release   # "Dayora": the hosted API, any network
+```
+
+They have different app IDs, so both can be installed at once. Raise `version` and
+`android.versionCode` in `app.json` for each release.
+
+Some Bangladeshi mobile networks can't reach some of Vercel's addresses. The app tries several
+at once and uses one that answers (`plugins/withReachableServer.js`).
 
 ## Debug APK = development build (loads the app from `npx expo start`)
 

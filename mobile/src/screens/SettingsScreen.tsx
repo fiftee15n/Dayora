@@ -1,11 +1,12 @@
 import { useNavigation } from "@react-navigation/native";
 import { format } from "date-fns/format";
+import Constants from "expo-constants";
 import * as ImagePicker from "expo-image-picker";
 import * as React from "react";
 import { AppState, Image, Linking, Pressable, ScrollView, Share, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { api, ApiError, setToken } from "../api";
+import { api, ApiError, getServer, setToken } from "../api";
 import { useAuth, useUser } from "../auth";
 import { Glyph, type GlyphName } from "../icons";
 import { getNotificationPermission, getReminderAlertsEnabled, setReminderAlertsEnabled } from "../notifications";
@@ -199,6 +200,9 @@ export function SettingsScreen() {
           accessibilityLabel="Dayora"
         />
         <Text style={{ color: c.mutedForeground, fontSize: 12, textAlign: "center", marginTop: 6 }}>Make every day count</Text>
+        <Text style={{ color: c.mutedForeground, fontSize: 11, textAlign: "center", marginTop: 4 }}>
+          {`Version ${Constants.expoConfig?.version ?? ""}${__DEV__ ? ` · Dev · ${getServer()}` : ""}`}
+        </Text>
       </ScrollView>
 
       <ProfileSheet visible={sheet === "profile"} onClose={() => setSheet(null)} />
